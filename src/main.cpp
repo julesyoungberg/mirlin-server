@@ -9,6 +9,12 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
+// TODO figure out how to bind this to some sort of analyzer object
+void on_open(websocketpp::connection_hdl conn) {
+    std::cout << "new connection" << std::endl;
+    std::cout << "starting the mirlin analyzer" << std::endl;
+}
+
 class MirlinServer {
 public:
     MirlinServer() {
@@ -19,13 +25,11 @@ public:
         endpoint_.set_access_channels(websocketpp::log::alevel::all ^
                                       websocketpp::log::alevel::frame_payload);
 
-        // Initialize Asio
         endpoint_.init_asio();
+
+        endpoint_.set_open_handler(&on_open);
     }
 
-    // TODO attach a handler to the open event on the endpoint
-    // https://docs.websocketpp.org/md_tutorials_utility_server_utility_server.html
-    // in the handler attach events for incoming messages and start analyzing incoming audio
     void run() {
         endpoint_.listen(9002);
 

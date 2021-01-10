@@ -11,5 +11,5 @@ Frame-by-frame analysis is chosen to avoid cross platform problems with the serv
 Requires Docker, but comes with most dependencies as include files. To start:
 
 ```
-docker-compose up
+make up
 ```
