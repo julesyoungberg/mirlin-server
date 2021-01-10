@@ -24,8 +24,9 @@ string WebsocketServer::stringify_json(const Json::Value& val) {
 }
 
 WebsocketServer::WebsocketServer() {
-    this->endpoint_.set_error_channels(websocketpp::log::elevel::all);
-    this->endpoint_.set_access_channels(websocketpp::log::alevel::all ^ websocketpp::log::alevel::frame_payload);
+    this->endpoint_.clear_access_channels(websocketpp::log::alevel::control);
+    this->endpoint_.clear_access_channels(websocketpp::log::alevel::frame_header);
+    this->endpoint_.clear_access_channels(websocketpp::log::alevel::frame_payload);
 
     // Wire up our event handlers
     this->endpoint_.set_open_handler(

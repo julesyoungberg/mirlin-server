@@ -54,9 +54,9 @@ int main(int argc, char* argv[]) {
 
         try {
             // set logging policy if needed
+            c.clear_access_channels(websocketpp::log::alevel::control);
             c.clear_access_channels(websocketpp::log::alevel::frame_header);
             c.clear_access_channels(websocketpp::log::alevel::frame_payload);
-            // c.set_error_channels(websocketpp::log::elevel::none);
 
             // Initialize ASIO
             c.init_asio();
