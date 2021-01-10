@@ -1,7 +1,10 @@
-.PHONY: build
+.PHONY: server client
 
-build:
+server:
 	clang++ -std=c++11 -o mirlin --include-directory ./include src/main.cpp -pthread
+
+client:
+	clang++ -std=c++11 -o mirlinclient --include-directory ./include client/main.cpp -pthread
 
 up:
 	docker-compose up --build

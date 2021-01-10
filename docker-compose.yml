@@ -1,10 +1,15 @@
 version: "3.4"
 
 services:
-  mirlinserver:
-    image: mirlinserver
+  mirlin:
+    image: mirlin
     build:
       context: .
       dockerfile: ./Dockerfile
     ports:
       - 9002:9002
+  client:
+    image: client
+    build:
+      context: .
+      dockerfile: ./client.Dockerfile

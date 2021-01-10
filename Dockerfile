@@ -7,7 +7,7 @@ RUN apt-get -y install clang make
 COPY . /usr/src
 WORKDIR /usr/src
 
-RUN make
+RUN make server
 
 EXPOSE 9002
 

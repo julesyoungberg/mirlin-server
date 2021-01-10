@@ -1,13 +1,12 @@
 #define ASIO_STANDALONE
 
+#include <functional>
 #include <iostream>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-#include <functional>
-
-typedef websocketpp::server<websocketpp::config::asio> server;
+typedef websocketpp::server<websocketpp::config::asio> Server;
 
 class MirlinAnalyzer {
 public:
@@ -51,11 +50,11 @@ public:
     }
 
 private:
-    server endpoint_;
+    Server endpoint_;
     MirlinAnalyzer analyzer_;
 };
 
-int main(int argc, char const* argv[]) {
+int main() {
     MirlinServer s;
     s.run();
     return 0;
