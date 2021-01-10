@@ -7,14 +7,14 @@
 // The name of the special JSON field that holds the message type for messages
 #define MESSAGE_FIELD "__MESSAGE__"
 
-Json::Value WebsocketServer::parseJson(const string& json) {
+Json::Value WebsocketServer::parse_json(const string& json) {
     Json::Value root;
     Json::Reader reader;
     reader.parse(json, root);
     return root;
 }
 
-string WebsocketServer::stringifyJson(const Json::Value& val) {
+string WebsocketServer::stringify_json(const Json::Value& val) {
     // When we transmit JSON data, we omit all whitespace
     Json::StreamWriterBuilder wbuilder;
     wbuilder["commentStyle"] = "None";
@@ -24,78 +24,81 @@ string WebsocketServer::stringifyJson(const Json::Value& val) {
 }
 
 WebsocketServer::WebsocketServer() {
+    this->endpoint_.set_error_channels(websocketpp::log::elevel::all);
+    this->endpoint_.set_access_channels(websocketpp::log::alevel::all ^ websocketpp::log::alevel::frame_payload);
+
     // Wire up our event handlers
-    this->endpoint.set_open_handler(
-        std::bind(&WebsocketServer::onOpen, this, std::placeholders::_1));
-    this->endpoint.set_close_handler(
-        std::bind(&WebsocketServer::onClose, this, std::placeholders::_1));
-    this->endpoint.set_message_handler(
-        std::bind(&WebsocketServer::onMessage, this, std::placeholders::_1, std::placeholders::_2));
+    this->endpoint_.set_open_handler(
+        std::bind(&WebsocketServer::on_open, this, std::placeholders::_1));
+    this->endpoint_.set_close_handler(
+        std::bind(&WebsocketServer::on_close, this, std::placeholders::_1));
+    this->endpoint_.set_message_handler(
+        std::bind(&WebsocketServer::on_message, this, std::placeholders::_1, std::placeholders::_2));
 
     // Initialise the Asio library, using our own event loop object
-    this->endpoint.init_asio(&(this->eventLoop));
+    this->endpoint_.init_asio(&(this->event_loop_));
 }
 
 void WebsocketServer::run(int port) {
     // Listen on the specified port number and start accepting connections
-    this->endpoint.listen(port);
-    this->endpoint.start_accept();
+    this->endpoint_.listen(port);
+    this->endpoint_.start_accept();
 
     // Start the Asio event loop
-    this->endpoint.run();
+    this->endpoint_.run();
 }
 
-size_t WebsocketServer::numConnections() {
+size_t WebsocketServer::num_connections() {
     // Prevent concurrent access to the list of open connections from multiple threads
-    std::lock_guard<std::mutex> lock(this->connectionListMutex);
+    std::lock_guard<std::mutex> lock(this->connection_list_mutex_);
 
-    return this->openConnections.size();
+    return this->open_connections_.size();
 }
 
-void WebsocketServer::sendMessage(ClientConnection conn, const string& messageType,
+void WebsocketServer::send_message(ClientConnection conn, const string& message_type,
                                   const Json::Value& arguments) {
     // Copy the argument values, and bundle the message type into the object
-    Json::Value messageData = arguments;
-    messageData[MESSAGE_FIELD] = messageType;
+    Json::Value message_data = arguments;
+    message_data[MESSAGE_FIELD] = message_type;
 
     // Send the JSON data to the client (will happen on the networking thread's event loop)
-    this->endpoint.send(conn, WebsocketServer::stringifyJson(messageData),
+    this->endpoint_.send(conn, WebsocketServer::stringify_json(message_data),
                         websocketpp::frame::opcode::text);
 }
 
-void WebsocketServer::broadcastMessage(const string& messageType, const Json::Value& arguments) {
+void WebsocketServer::broadcast_message(const string& message_type, const Json::Value& arguments) {
     // Prevent concurrent access to the list of open connections from multiple threads
-    std::lock_guard<std::mutex> lock(this->connectionListMutex);
+    std::lock_guard<std::mutex> lock(this->connection_list_mutex_);
 
-    for (auto conn : this->openConnections) {
-        this->sendMessage(conn, messageType, arguments);
+    for (auto conn : this->open_connections_) {
+        this->send_message(conn, message_type, arguments);
     }
 }
 
-void WebsocketServer::onOpen(ClientConnection conn) {
+void WebsocketServer::on_open(ClientConnection conn) {
     {
         // Prevent concurrent access to the list of open connections from multiple threads
-        std::lock_guard<std::mutex> lock(this->connectionListMutex);
+        std::lock_guard<std::mutex> lock(this->connection_list_mutex_);
 
         // Add the connection handle to our list of open connections
-        this->openConnections.push_back(conn);
+        this->open_connections_.push_back(conn);
     }
 
     // Invoke any registered handlers
-    for (auto handler : this->connectHandlers) {
+    for (auto handler : this->connect_handlers_) {
         handler(conn);
     }
 }
 
-void WebsocketServer::onClose(ClientConnection conn) {
+void WebsocketServer::on_close(ClientConnection conn) {
     {
         // Prevent concurrent access to the list of open connections from multiple threads
-        std::lock_guard<std::mutex> lock(this->connectionListMutex);
+        std::lock_guard<std::mutex> lock(this->connection_list_mutex_);
 
         // Remove the connection handle from our list of open connections
-        auto connVal = conn.lock();
-        auto newEnd = std::remove_if(this->openConnections.begin(), this->openConnections.end(),
-                                     [&connVal](ClientConnection elem) {
+        auto conn_val = conn.lock();
+        auto new_end = std::remove_if(this->open_connections_.begin(), this->open_connections_.end(),
+                                     [&conn_val](ClientConnection elem) {
                                          // If the pointer has expired, remove it from the vector
                                          if (elem.expired() == true) {
                                              return true;
@@ -103,8 +106,8 @@ void WebsocketServer::onClose(ClientConnection conn) {
 
                                          // If the pointer is still valid, compare it to the handle
                                          // for the closed connection
-                                         auto elemVal = elem.lock();
-                                         if (elemVal.get() == connVal.get()) {
+                                         auto elem_val = elem.lock();
+                                         if (elem_val.get() == conn_val.get()) {
                                              return true;
                                          }
 
@@ -112,29 +115,29 @@ void WebsocketServer::onClose(ClientConnection conn) {
                                      });
 
         // Truncate the connections vector to erase the removed elements
-        this->openConnections.resize(std::distance(openConnections.begin(), newEnd));
+        this->open_connections_.resize(std::distance(this->open_connections_.begin(), new_end));
     }
 
     // Invoke any registered handlers
-    for (auto handler : this->disconnectHandlers) {
+    for (auto handler : this->disconnect_handlers_) {
         handler(conn);
     }
 }
 
-void WebsocketServer::onMessage(ClientConnection conn, WebsocketEndpoint::message_ptr msg) {
+void WebsocketServer::on_message(ClientConnection conn, WebsocketEndpoint::message_ptr msg) {
     // Validate that the incoming message contains valid JSON
-    Json::Value messageObject = WebsocketServer::parseJson(msg->get_payload());
-    if (messageObject.isNull() == false) {
+    Json::Value message_object = WebsocketServer::parse_json(msg->get_payload());
+    if (message_object.isNull() == false) {
         // Validate that the JSON object contains the message type field
-        if (messageObject.isMember(MESSAGE_FIELD)) {
+        if (message_object.isMember(MESSAGE_FIELD)) {
             // Extract the message type and remove it from the payload
-            std::string messageType = messageObject[MESSAGE_FIELD].asString();
-            messageObject.removeMember(MESSAGE_FIELD);
+            std::string message_type = message_object[MESSAGE_FIELD].asString();
+            message_object.removeMember(MESSAGE_FIELD);
 
             // If any handlers are registered for the message type, invoke them
-            auto& handlers = this->messageHandlers[messageType];
+            auto& handlers = this->message_handlers_[message_type];
             for (auto handler : handlers) {
-                handler(conn, messageObject);
+                handler(conn, message_object);
             }
         }
     }

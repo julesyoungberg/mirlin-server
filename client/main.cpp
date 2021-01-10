@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
     while (true) {
         client c;
 
-        std::string uri = "ws://localhost:9002";
+        std::string uri = "ws://mirlin:9002";
 
         if (argc == 2) {
             uri = argv[1];
