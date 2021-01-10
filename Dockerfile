@@ -1,4 +1,3 @@
-# Get the base Ubuntu image from Docker Hub
 FROM mtgupf/essentia:ubuntu18.04-v2.1_beta5
 
 RUN apt-get -y update && apt-get install -y
@@ -9,5 +8,7 @@ COPY . /usr/src
 WORKDIR /usr/src
 
 RUN make
+
+EXPOSE 9002
 
 CMD ["./mirlin"]
