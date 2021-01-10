@@ -4,7 +4,7 @@
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
- 
+
 #include <functional>
 
 typedef websocketpp::server<websocketpp::config::asio> server;
@@ -16,8 +16,9 @@ public:
 
         // Set logging settings
         endpoint_.set_error_channels(websocketpp::log::elevel::all);
-        endpoint_.set_access_channels(websocketpp::log::alevel::all ^ websocketpp::log::alevel::frame_payload);
- 
+        endpoint_.set_access_channels(websocketpp::log::alevel::all ^
+                                      websocketpp::log::alevel::frame_payload);
+
         // Initialize Asio
         endpoint_.init_asio();
     }
@@ -26,7 +27,6 @@ public:
     // https://docs.websocketpp.org/md_tutorials_utility_server_utility_server.html
     // in the handler attach events for incoming messages and start analyzing incoming audio
     void run() {
-        // Listen on port 9002
         endpoint_.listen(9002);
 
         // Queues a connection accept operation
@@ -40,7 +40,7 @@ private:
     server endpoint_;
 };
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char const* argv[]) {
     MirlinServer s;
     s.run();
     return 0;
