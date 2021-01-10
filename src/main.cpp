@@ -1,61 +1,82 @@
-#define ASIO_STANDALONE
-
-#include <functional>
 #include <iostream>
+#include <thread>
+#include <asio/io_service.hpp>
 
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+#include "WebsocketServer.hpp"
 
-typedef websocketpp::server<websocketpp::config::asio> Server;
+//The port number the WebSocket server listens on
+#define PORT_NUMBER 8080
 
-class MirlinAnalyzer {
-public:
-    MirlinAnalyzer() {
-        // set defaults
-    }
-
-    void on_open(websocketpp::connection_hdl conn) {
-        conn_ = conn;
-        std::cout << "new connection" << std::endl;
-        std::cout << "starting the mirlin analyzer" << std::endl;
-    }
-
-private:
-    websocketpp::connection_hdl conn_;
-};
-
-class MirlinServer {
-public:
-    MirlinServer() {
-        std::cout << "starting the mirlin server" << std::endl;
-
-        // Set logging settings
-        endpoint_.set_error_channels(websocketpp::log::elevel::all);
-        endpoint_.set_access_channels(websocketpp::log::alevel::all ^
-                                      websocketpp::log::alevel::frame_payload);
-
-        endpoint_.init_asio();
-
-        endpoint_.set_open_handler(std::bind(&MirlinAnalyzer::on_open, &analyzer_, std::placeholders::_1));
-    }
-
-    void run() {
-        endpoint_.listen(9002);
-
-        // Queues a connection accept operation
-        endpoint_.start_accept();
-
-        // Start the Asio io_service run loop
-        endpoint_.run();
-    }
-
-private:
-    Server endpoint_;
-    MirlinAnalyzer analyzer_;
-};
-
-int main() {
-    MirlinServer s;
-    s.run();
-    return 0;
+int main(int argc, char* argv[])
+{
+	//Create the event loop for the main thread, and the WebSocket server
+	asio::io_service mainEventLoop;
+	WebsocketServer server;
+	
+	//Register our network callbacks, ensuring the logic is run on the main thread's event loop
+	server.connect([&mainEventLoop, &server](ClientConnection conn)
+	{
+		mainEventLoop.post([conn, &server]()
+		{
+			std::clog << "Connection opened." << std::endl;
+			std::clog << "There are now " << server.numConnections() << " open connections." << std::endl;
+			
+			//Send a hello message to the client
+			server.sendMessage(conn, "hello", Json::Value());
+		});
+	});
+	server.disconnect([&mainEventLoop, &server](ClientConnection conn)
+	{
+		mainEventLoop.post([conn, &server]()
+		{
+			std::clog << "Connection closed." << std::endl;
+			std::clog << "There are now " << server.numConnections() << " open connections." << std::endl;
+		});
+	});
+	server.message("message", [&mainEventLoop, &server](ClientConnection conn, const Json::Value& args)
+	{
+		mainEventLoop.post([conn, args, &server]()
+		{
+			std::clog << "message handler on the main thread" << std::endl;
+			std::clog << "Message payload:" << std::endl;
+			for (auto key : args.getMemberNames()) {
+				std::clog << "\t" << key << ": " << args[key].asString() << std::endl;
+			}
+			
+			//Echo the message pack to the client
+			server.sendMessage(conn, "message", args);
+		});
+	});
+	
+	//Start the networking thread
+	std::thread serverThread([&server]() {
+		server.run(PORT_NUMBER);
+	});
+	
+	//Start a keyboard input thread that reads from stdin
+	std::thread inputThread([&server, &mainEventLoop]()
+	{
+		string input;
+		while (1)
+		{
+			//Read user input from stdin
+			std::getline(std::cin, input);
+			
+			//Broadcast the input to all connected clients (is sent on the network thread)
+			Json::Value payload;
+			payload["input"] = input;
+			server.broadcastMessage("userInput", payload);
+			
+			//Debug output on the main thread
+			mainEventLoop.post([]() {
+				std::clog << "User input debug output on the main thread" << std::endl;
+			});
+		}
+	});
+	
+	//Start the event loop for the main thread
+	asio::io_service::work work(mainEventLoop);
+	mainEventLoop.run();
+	
+	return 0;
 }
