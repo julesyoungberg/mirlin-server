@@ -1,6 +1,6 @@
 # mirlin server
 
-A Music Information Retrieval server for real time analysis powered by Essentia.
+A real time music information retrieval server powered by essentia.
 
 Analysis can be initiated by another application, and then the server will begin to accept frames of audio data. The server will continuously return extracted features.
 
