@@ -9,11 +9,21 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-// TODO figure out how to bind this to some sort of analyzer object
-void on_open(websocketpp::connection_hdl conn) {
-    std::cout << "new connection" << std::endl;
-    std::cout << "starting the mirlin analyzer" << std::endl;
-}
+class MirlinAnalyzer {
+public:
+    MirlinAnalyzer() {
+        // set defaults
+    }
+
+    void on_open(websocketpp::connection_hdl conn) {
+        conn_ = conn;
+        std::cout << "new connection" << std::endl;
+        std::cout << "starting the mirlin analyzer" << std::endl;
+    }
+
+private:
+    websocketpp::connection_hdl conn_;
+};
 
 class MirlinServer {
 public:
@@ -27,7 +37,7 @@ public:
 
         endpoint_.init_asio();
 
-        endpoint_.set_open_handler(&on_open);
+        endpoint_.set_open_handler(std::bind(&MirlinAnalyzer::on_open, &analyzer_, std::placeholders::_1));
     }
 
     void run() {
@@ -42,6 +52,7 @@ public:
 
 private:
     server endpoint_;
+    MirlinAnalyzer analyzer_;
 };
 
 int main(int argc, char const* argv[]) {
