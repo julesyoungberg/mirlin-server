@@ -1,7 +1,9 @@
 #ifndef _WEBSOCKET_SERVER
 #define _WEBSOCKET_SERVER
 
+#ifndef ASIO_STANDALONE
 #define ASIO_STANDALONE
+#endif
 
 #include <json/json.h>
 #include <websocketpp/config/asio_no_tls.hpp>
