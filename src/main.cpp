@@ -3,32 +3,11 @@
 #include <thread>
 #include <vector>
 
+#include "Analyzer.hpp"
 #include "WebsocketServer.hpp"
 
 // The port number the WebSocket server listens on
 #define PORT_NUMBER 9002
-
-class Analyzer {
-public:
-    Analyzer() {}
-
-    void start_session(std::vector<string> features) {
-        std::clog << "Session initiated, starting the mirlin analyzer..." << std::endl;
-        this->features_ = features;
-        this->busy = true;
-    }
-
-    void end_session() {
-        std::clog << "Session ended" << std::endl;
-        this->busy = false;
-    }
-
-    bool busy = false;
-
-private:
-    std::vector<string> features_;
-
-};
 
 int main(int argc, char* argv[]) {
     std::clog << "Starting the mirlin server..." << std::endl;
@@ -68,12 +47,10 @@ int main(int argc, char* argv[]) {
                 }
 
                 std::clog << "Message payload:" << std::endl;
-                std::clog << "type: " << args["type"] << std::endl;
-                std::clog << "payload:" << std::endl;
                 std::clog << "\tfeatures:" << std::endl;
 
                 auto json_features = args["payload"]["features"];
-                std::vector<string> features;
+                std::vector<std::string> features;
 
                 for (Json::Value::ArrayIndex i = 0; i != json_features.size(); i++) {
                     auto feature = json_features[i].asString();
@@ -89,6 +66,7 @@ int main(int argc, char* argv[]) {
                 Json::Value confirmation;
                 confirmation["payload"] = payload;
 
+                std::clog << "Sending subscription confirmation" << std::endl;
                 server.send_message(conn, "subscription_confirmation", confirmation);
             });
         });
