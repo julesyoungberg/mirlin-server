@@ -13,3 +13,10 @@ Requires Docker, but comes with most dependencies as include files. To start:
 ```
 make up
 ```
+
+To run the example rust client:
+
+```
+cd client
+cargo run --release
+```
