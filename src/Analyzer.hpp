@@ -3,9 +3,18 @@
 
 #include <vector>
 #include <iostream>
+#include <essentia/algorithmfactory.h>
+#include <essentia/essentiamath.h>
+#include <essentia/pool.h>
+
+using namespace essentia::standard;
 
 // TODO: use essentia to extract features from audio
 // https://essentia.upf.edu/howto_standard_extractor.html
+// TODO: investigate potential of streaming mode
+// https://essentia.upf.edu/reference/streaming_VectorInput.html
+// check out vector input 
+// https://essentia.upf.edu/streaming_architecture.html#special-connectors
 class Analyzer {
 public:
     Analyzer() {}
