@@ -1,0 +1,1 @@
+An example rust client.
