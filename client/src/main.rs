@@ -1,9 +1,9 @@
-use std::io::stdin;
+use serde_json;
+use serde_json::{json, Value};
 use std::panic;
-use std::sync::mpsc::channel;
+use std::string::ToString;
 use std::thread;
 use std::time;
-
 use websocket::client::ClientBuilder;
 use websocket::{Message, OwnedMessage};
 
@@ -22,105 +22,44 @@ fn run() {
 
     let (mut receiver, mut sender) = client.split().unwrap();
 
-    let (tx, rx) = channel();
-
-    let tx_1 = tx.clone();
-
-    let send_loop = thread::spawn(move || {
-        loop {
-            // Send loop
-            let message = match rx.recv() {
-                Ok(m) => m,
-                Err(e) => {
-                    println!("Send Loop: {:?}", e);
-                    return;
-                }
-            };
-            match message {
-                OwnedMessage::Close(_) => {
-                    let _ = sender.send_message(&message);
-                    // If it's a close message, just send it and then return.
-                    return;
-                }
-                _ => (),
-            }
-            // Send the message
-            match sender.send_message(&message) {
-                Ok(()) => (),
-                Err(e) => {
-                    println!("Send Loop: {:?}", e);
-                    let _ = sender.send_message(&Message::close());
-                    return;
-                }
-            }
+    let subscription_request = json!({
+        "type": "subscription_request",
+        "payload": {
+            "features": ["onset", "pitch"],
         }
     });
 
-    let receive_loop = thread::spawn(move || {
-        // Receive loop
-        for message in receiver.incoming_messages() {
-            let message = match message {
-                Ok(m) => m,
-                Err(e) => {
-                    println!("Receive Loop: {:?}", e);
-                    let _ = tx_1.send(OwnedMessage::Close(None));
-                    return;
-                }
-            };
-            match message {
-                OwnedMessage::Close(_) => {
-                    // Got a close message, so send a close message and return
-                    let _ = tx_1.send(OwnedMessage::Close(None));
-                    return;
-                }
-                OwnedMessage::Ping(data) => {
-                    match tx_1.send(OwnedMessage::Pong(data)) {
-                        // Send a pong in response
-                        Ok(()) => (),
-                        Err(e) => {
-                            println!("Receive Loop: {:?}", e);
-                            return;
-                        }
-                    }
-                }
-                // Say what we received
-                _ => println!("Receive Loop: {:?}", message),
-            }
-        }
-    });
+    let request_message = OwnedMessage::Text(subscription_request.to_string());
 
-    loop {
-        let mut input = String::new();
-
-        stdin().read_line(&mut input).unwrap();
-
-        let trimmed = input.trim();
-
-        let message = match trimmed {
-            "/close" => {
-                // Close the connection
-                let _ = tx.send(OwnedMessage::Close(None));
-                break;
-            }
-            // Send a ping
-            "/ping" => OwnedMessage::Ping(b"PING".to_vec()),
-            // Otherwise, just send text
-            _ => OwnedMessage::Text(trimmed.to_string()),
-        };
-
-        match tx.send(message) {
-            Ok(()) => (),
-            Err(e) => {
-                println!("Main Loop: {:?}", e);
-                break;
-            }
+    match sender.send_message(&request_message) {
+        Ok(()) => (),
+        Err(e) => {
+            println!("Error requesting subscription: {:?}", e);
+            return;
         }
     }
 
-    println!("Waiting for child threads to exit");
+    let confirmation_msg = match receiver.recv_message() {
+        Ok(msg) => msg,
+        Err(e) => {
+            println!("Error confirming subscription: {:?}", e);
+            return;
+        }
+    };
 
-    let _ = send_loop.join();
-    let _ = receive_loop.join();
+    let confirmation: Value = match confirmation_msg {
+        OwnedMessage::Text(json_string) => serde_json::from_str(&json_string).unwrap(),
+        _ => {
+            println!("Invalid confirmation message");
+            return;
+        }
+    };
+
+    println!("confirmation: {:?}", confirmation);
+
+    // TODO begin sending audio data and receiving features
+    // spin up 2 threads for this like here
+    // https://github.com/websockets-rs/rust-websocket/blob/master/examples/client.rs
 }
 
 fn main() {

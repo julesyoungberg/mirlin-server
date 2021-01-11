@@ -1,6 +1,7 @@
 #include <asio/io_service.hpp>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 #include "WebsocketServer.hpp"
 
@@ -20,9 +21,6 @@ int main(int argc, char* argv[]) {
             std::clog << "Connection opened." << std::endl;
             std::clog << "There are now " << server.num_connections() << " open connections."
                       << std::endl;
-
-            // Send a hello message to the client
-            server.send_message(conn, "hello", Json::Value());
         });
     });
 
@@ -35,16 +33,29 @@ int main(int argc, char* argv[]) {
     });
 
     server.message(
-        "message", [&main_event_loop, &server](ClientConnection conn, const Json::Value& args) {
+        "subscription_request", [&main_event_loop, &server](ClientConnection conn, const Json::Value& args) {
             main_event_loop.post([conn, args, &server]() {
-                std::clog << "message handler on the main thread" << std::endl;
                 std::clog << "Message payload:" << std::endl;
-                for (auto key : args.getMemberNames()) {
-                    std::clog << "\t" << key << ": " << args[key].asString() << std::endl;
+                std::clog << "type: " << args["type"] << std::endl;
+                std::clog << "payload:" << std::endl;
+                std::clog << "\tfeatures:" << std::endl;
+
+                auto json_features = args["payload"]["features"];
+                std::vector<string> features;
+
+                for (Json::Value::ArrayIndex i = 0; i != json_features.size(); i++) {
+                    auto feature = json_features[i].asString();
+                    std::clog << "\t\t- " << feature << std::endl;
+                    features.push_back(feature);
                 }
 
-                // Echo the message pack to the client
-                server.send_message(conn, "message", args);
+                Json::Value payload;
+                payload["status"] = "ok";
+
+                Json::Value confirmation;
+                confirmation["payload"] = payload;
+
+                server.send_message(conn, "subscription_confirmation", confirmation);
             });
         });
 
