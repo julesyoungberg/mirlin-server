@@ -8,12 +8,35 @@
 // The port number the WebSocket server listens on
 #define PORT_NUMBER 9002
 
+class Analyzer {
+public:
+    Analyzer() {}
+
+    void start_session(std::vector<string> features) {
+        std::clog << "Session initiated, starting the mirlin analyzer..." << std::endl;
+        this->features_ = features;
+        this->busy = true;
+    }
+
+    void end_session() {
+        std::clog << "Session ended" << std::endl;
+        this->busy = false;
+    }
+
+    bool busy = false;
+
+private:
+    std::vector<string> features_;
+
+};
+
 int main(int argc, char* argv[]) {
     std::clog << "Starting the mirlin server..." << std::endl;
 
     // Create the event loop for the main thread, and the WebSocket server
     asio::io_service main_event_loop;
     WebsocketServer server;
+    Analyzer analyzer;
 
     // Register our network callbacks, ensuring the logic is run on the main thread's event loop
     server.connect([&main_event_loop, &server](ClientConnection conn) {
@@ -24,17 +47,26 @@ int main(int argc, char* argv[]) {
         });
     });
 
-    server.disconnect([&main_event_loop, &server](ClientConnection conn) {
-        main_event_loop.post([conn, &server]() {
+    server.disconnect([&main_event_loop, &server, &analyzer](ClientConnection conn) {
+        main_event_loop.post([conn, &server, &analyzer]() {
             std::clog << "Connection closed." << std::endl;
             std::clog << "There are now " << server.num_connections() << " open connections."
                       << std::endl;
+
+            if (server.num_connections() == 0) {
+                analyzer.end_session();
+            }
         });
     });
 
     server.message(
-        "subscription_request", [&main_event_loop, &server](ClientConnection conn, const Json::Value& args) {
-            main_event_loop.post([conn, args, &server]() {
+        "subscription_request", [&main_event_loop, &server, &analyzer](ClientConnection conn, const Json::Value& args) {
+            main_event_loop.post([conn, args, &server, &analyzer]() {
+                if (analyzer.busy) {
+                    // TODO: respond with error and disconnect
+                    return;
+                }
+
                 std::clog << "Message payload:" << std::endl;
                 std::clog << "type: " << args["type"] << std::endl;
                 std::clog << "payload:" << std::endl;
@@ -48,6 +80,8 @@ int main(int argc, char* argv[]) {
                     std::clog << "\t\t- " << feature << std::endl;
                     features.push_back(feature);
                 }
+
+                analyzer.start_session(features);
 
                 Json::Value payload;
                 payload["status"] = "ok";

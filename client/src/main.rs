@@ -5,7 +5,7 @@ use std::string::ToString;
 use std::thread;
 use std::time;
 use websocket::client::ClientBuilder;
-use websocket::{Message, OwnedMessage};
+use websocket::OwnedMessage;
 
 const CONNECTION: &'static str = "ws://127.0.0.1:9002";
 
