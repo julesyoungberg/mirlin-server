@@ -71,6 +71,36 @@ int main(int argc, char* argv[]) {
             });
         });
 
+    server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn, const Json::Value& args) {
+        main_event_loop.post([conn, args, &server, &analyzer]() {
+            std::clog << "Received audio frame" << std::endl;
+
+            auto json_frame = args["payload"];
+            std::vector<float> frame;
+
+            for (Json::Value::ArrayIndex i = 0; i != json_frame.size(); i++) {
+                float sample = json_frame[i].asFloat();
+                frame.push_back(sample);
+            }
+
+            std::clog << "Frame length: " << frame.size() << std::endl;
+            // TODO send frame to analyzer
+
+            Json::Value features;
+            features["onset"] = false;
+            features["pitch"] = "C";
+
+            Json::Value payload;
+            payload["features"] = features;
+
+            Json::Value features_msg;
+            features_msg["payload"] = payload;
+
+            std::clog << "Sending features to client" << std::endl;
+            server.send_message(conn, "audio_features", features_msg);
+        });
+    });
+
     // Start the networking thread
     std::thread server_thread([&server]() { server.run(PORT_NUMBER); });
 
