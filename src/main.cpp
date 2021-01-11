@@ -83,8 +83,8 @@ int main(int argc, char* argv[]) {
                 frame.push_back(sample);
             }
 
-            std::clog << "Frame length: " << frame.size() << std::endl;
-            // TODO send frame to analyzer
+            analyzer.process_frame(frame);
+            // TODO get features from analyzer
 
             Json::Value features;
             features["onset"] = false;
