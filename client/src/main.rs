@@ -1,5 +1,4 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::Data;
 use serde_json;
 use serde_json::{json, Value};
 use std::panic;
@@ -8,7 +7,7 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time;
 use websocket::client::ClientBuilder;
-use websocket::{Message, OwnedMessage};
+use websocket::OwnedMessage;
 
 const CONNECTION: &'static str = "ws://127.0.0.1:9002";
 
