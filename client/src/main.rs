@@ -4,10 +4,11 @@ use serde_json;
 use serde_json::{json, Value};
 use std::panic;
 use std::string::ToString;
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time;
 use websocket::client::ClientBuilder;
-use websocket::OwnedMessage;
+use websocket::{Message, OwnedMessage};
 
 const CONNECTION: &'static str = "ws://127.0.0.1:9002";
 
@@ -80,6 +81,10 @@ fn run() {
         .expect("no supported audio config?!")
         .with_max_sample_rate();
 
+    let (tx, rx) = channel();
+    let tx_1 = tx.clone();
+    let tx_2 = tx.clone();
+
     // create the stream
     let stream = device
         .build_input_stream(
@@ -89,20 +94,79 @@ fn run() {
                     "received {} bytes of audio input, forwarding to mirlin server",
                     data.len()
                 );
+
+                let frame_message = json!({
+                    "type": "audio_frame",
+                    "payload": data,
+                });
+
+                // send frame to server
+                let message = OwnedMessage::Text(frame_message.to_string());
+                match sender.send_message(&message) {
+                    Ok(()) => (),
+                    Err(e) => {
+                        println!("Error sending frame: {:?}", e);
+                        let _ = tx.send(OwnedMessage::Close(None));
+                        return;
+                    }
+                }
             },
             move |err| {
                 println!("error: {:?}", err);
+                let _ = tx_1.send(OwnedMessage::Close(None));
+                return;
             },
         )
         .unwrap();
 
     stream.play().unwrap();
     std::thread::sleep(std::time::Duration::from_secs(3));
-    drop(stream);
 
-    // TODO begin sending audio data and receiving features
-    // spin up 2 threads for this like here
-    // https://github.com/websockets-rs/rust-websocket/blob/master/examples/client.rs
+    // Receive loop
+    let receive_loop = thread::spawn(move || {
+        for message in receiver.incoming_messages() {
+            let message = match message {
+                Ok(m) => m,
+                Err(e) => {
+                    println!("Error receiving message: {:?}", e);
+                    let _ = tx_2.send(OwnedMessage::Close(None));
+                    return;
+                }
+            };
+
+            let value: Value = match message {
+                OwnedMessage::Text(json_string) => serde_json::from_str(&json_string).unwrap(),
+                _ => {
+                    println!("Received unexpected message: {:?}", message);
+                    let _ = tx_2.send(OwnedMessage::Close(None));
+                    return;
+                }
+            };
+
+            println!("received: {:?}", value);
+            // TODO: do something awesome with the data
+        }
+    });
+
+    // listen to channel for messages from threads
+    loop {
+        let message = match rx.recv() {
+            Ok(m) => m,
+            Err(e) => {
+                println!("Error reading from channel: {:?}", e);
+                break;
+            }
+        };
+
+        match message {
+            OwnedMessage::Close(_) => break,
+            _ => (),
+        }
+    }
+
+    println!("closing stream");
+    drop(stream);
+    let _ = receive_loop.join();
 }
 
 fn main() {
