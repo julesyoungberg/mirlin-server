@@ -128,11 +128,9 @@ void WebsocketServer::on_close(ClientConnection conn) {
 }
 
 void WebsocketServer::on_message(ClientConnection conn, WebsocketEndpoint::message_ptr msg) {
-    std::clog << "Received message" << std::endl;
     // Validate that the incoming message contains valid JSON
     Json::Value message_object = WebsocketServer::parse_json(msg->get_payload());
     if (message_object.isNull() == false) {
-        std::clog << "Validated JSON" << std::endl;
         // Validate that the JSON object contains the message type field
         if (message_object.isMember(MESSAGE_FIELD)) {
             // Extract the message type and remove it from the payload

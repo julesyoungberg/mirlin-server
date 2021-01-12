@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <iostream>
-// #include <thread>
+#include <thread>
 // #include <unistd.h>
 // #include <chrono>
 
@@ -34,7 +34,7 @@ public:
 
     void end_session();
 
-    void process_frame(std::vector<float> frame);
+    float process_frame(std::vector<float> raw_frame);
 
     bool busy = false;
 
@@ -42,12 +42,12 @@ private:
     unsigned int sample_rate_;
     unsigned int frame_size_;
     unsigned int hop_size_;
-    // unsigned int frame_count_;
+    unsigned int frame_count_;
 
     float combine_ms_;
 
     std::vector<std::string> features_;
-    std::vector<std::vector<Real>> strength_;
+    std::vector<std::vector<Real>> peaks_;
 
     /// ESSENTIA
     /// algos
@@ -62,11 +62,13 @@ private:
     streaming::Algorithm* super_flux_peaks_;
     //// IO
     streaming::VectorOutput<std::vector<Real>>* essout_;
-    streaming::Algorithm* ring_buffer_;
+    RingBufferInput* ring_buffer_;
 
     Pool pool_;
 
     scheduler::Network* network_ = NULL;
+
+    std::thread worker_;
 };
 
 #endif

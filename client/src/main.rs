@@ -94,11 +94,6 @@ fn run() {
         .build_input_stream(
             &supported_config.config(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                println!(
-                    "received {} bytes of audio input, forwarding to mirlin server",
-                    data.len()
-                );
-
                 let frame_message = json!({
                     "type": "audio_frame",
                     "payload": data,
@@ -174,9 +169,10 @@ fn run() {
 }
 
 fn main() {
-    loop {
-        let _result = panic::catch_unwind(run);
-        println!("Sleeping for 10 seconds...");
-        thread::sleep(time::Duration::from_secs(10));
-    }
+    run();
+    // loop {
+    //     let _result = panic::catch_unwind(run);
+    //     println!("Sleeping for 10 seconds...");
+    //     thread::sleep(time::Duration::from_secs(10));
+    // }
 }

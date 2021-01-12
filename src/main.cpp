@@ -32,9 +32,8 @@ int main(int argc, char* argv[]) {
             std::clog << "There are now " << server.num_connections() << " open connections."
                       << std::endl;
 
-            if (server.num_connections() == 0) {
-                analyzer.end_session();
-            }
+            analyzer.end_session();
+            analyzer = Analyzer();
         });
     });
 
@@ -49,7 +48,7 @@ int main(int argc, char* argv[]) {
             std::clog << "Message payload:" << std::endl;
 
             auto sample_rate = args["payload"]["sample_rate"].asUInt();
-            std::clog << "sample_rate: " << std::to_string(sample_rate) << std::endl;
+            std::clog << "\tsample_rate: " << std::to_string(sample_rate) << std::endl;
 
             std::clog << "\tfeatures:" << std::endl;
             auto json_features = args["payload"]["features"];
@@ -87,11 +86,10 @@ int main(int argc, char* argv[]) {
                 frame.push_back(sample);
             }
 
-            analyzer.process_frame(frame);
-            // TODO get features from analyzer
+            float onset_strength = analyzer.process_frame(frame);
 
             Json::Value features;
-            features["onset"] = false;
+            features["onset"] = onset_strength > 0;
             features["pitch"] = "C";
 
             Json::Value payload;
