@@ -121,5 +121,14 @@ float Analyzer::process_frame(std::vector<float> raw_frame) {
         }
     }
 
+    // pool_.set("i.centroid", pool_.value<Real>("i.centroid")* sample_rate_ / 2);
+    // std::vector<Real> v = pool_.value<std::vector<Real>>("i.mfcc");
+    // for (auto& e : v) {
+    //     e /= (frame_size_ / 2 + 1);
+    // }
+    // pool_.set("i.mfcc", v);
+    // peaks_.clear();
+    // essout_->setVector(&peaks_);
+
     return val;
 }
