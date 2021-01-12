@@ -24,7 +24,9 @@ if (MINGW)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -L/usr/local/lib -lessentia -lfftw3 -lyaml -lavcodec -lavformat -lavutil -lsamplerate -ltag -lfftw3f -lQtCore -lgaia2")
+# https://essentia.upf.edu/FAQ.html#how-to-compile-my-own-c-code-that-uses-essentia
+# CAUTION: the compiler will say these are unused but they are required
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -L/usr/local/lib -lessentia")
 
 # Force WebSocket++ to use 100% C++11 mode, so that it doesn't try to look for Boost
 # (Note that under MinGW, Boost.Thread is still required, due to a bug in MinGW that prevents the C++11 version from being used)

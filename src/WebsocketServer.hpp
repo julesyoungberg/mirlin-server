@@ -1,3 +1,4 @@
+// stolen from: https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.h
 #ifndef _WEBSOCKET_SERVER
 #define _WEBSOCKET_SERVER
 
@@ -39,7 +40,8 @@ public:
     // Registers a callback for when a client disconnects
     template <typename CallbackTy> void disconnect(CallbackTy handler) {
         // Make sure we only access the handlers list from the networking thread
-        this->event_loop_.post([this, handler]() { this->disconnect_handlers_.push_back(handler); });
+        this->event_loop_.post(
+            [this, handler]() { this->disconnect_handlers_.push_back(handler); });
     }
 
     // Registers a callback for when a particular type of message is received
@@ -53,7 +55,7 @@ public:
     // Sends a message to an individual client
     //(Note: the data transmission will take place on the thread that called WebsocketServer::run())
     void send_message(ClientConnection conn, const string& message_type,
-                     const Json::Value& arguments);
+                      const Json::Value& arguments);
 
     // Sends a message to all connected clients
     //(Note: the data transmission will take place on the thread that called WebsocketServer::run())
@@ -74,7 +76,8 @@ protected:
 
     vector<std::function<void(ClientConnection)>> connect_handlers_;
     vector<std::function<void(ClientConnection)>> disconnect_handlers_;
-    map<string, vector<std::function<void(ClientConnection, const Json::Value&)>>> message_handlers_;
+    map<string, vector<std::function<void(ClientConnection, const Json::Value&)>>>
+        message_handlers_;
 };
 
 #endif

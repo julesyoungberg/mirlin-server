@@ -10,4 +10,4 @@ up:
 	docker-compose up --build
 
 format:
-	clang-format -i ./src/*.cpp src/*.hpp client/*.cpp
+	clang-format -i ./src/*.cpp src/*.hpp

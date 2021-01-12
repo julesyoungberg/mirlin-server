@@ -1,3 +1,4 @@
+// stolen from: https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.cpp
 #include <algorithm>
 #include <functional>
 #include <iostream>
@@ -33,8 +34,8 @@ WebsocketServer::WebsocketServer() {
         std::bind(&WebsocketServer::on_open, this, std::placeholders::_1));
     this->endpoint_.set_close_handler(
         std::bind(&WebsocketServer::on_close, this, std::placeholders::_1));
-    this->endpoint_.set_message_handler(
-        std::bind(&WebsocketServer::on_message, this, std::placeholders::_1, std::placeholders::_2));
+    this->endpoint_.set_message_handler(std::bind(&WebsocketServer::on_message, this,
+                                                  std::placeholders::_1, std::placeholders::_2));
 
     // Initialise the Asio library, using our own event loop object
     this->endpoint_.init_asio(&(this->event_loop_));
@@ -57,14 +58,14 @@ size_t WebsocketServer::num_connections() {
 }
 
 void WebsocketServer::send_message(ClientConnection conn, const string& message_type,
-                                  const Json::Value& arguments) {
+                                   const Json::Value& arguments) {
     // Copy the argument values, and bundle the message type into the object
     Json::Value message_data = arguments;
     message_data[MESSAGE_FIELD] = message_type;
 
     // Send the JSON data to the client (will happen on the networking thread's event loop)
     this->endpoint_.send(conn, WebsocketServer::stringify_json(message_data),
-                        websocketpp::frame::opcode::text);
+                         websocketpp::frame::opcode::text);
 }
 
 void WebsocketServer::broadcast_message(const string& message_type, const Json::Value& arguments) {
@@ -98,22 +99,23 @@ void WebsocketServer::on_close(ClientConnection conn) {
 
         // Remove the connection handle from our list of open connections
         auto conn_val = conn.lock();
-        auto new_end = std::remove_if(this->open_connections_.begin(), this->open_connections_.end(),
-                                     [&conn_val](ClientConnection elem) {
-                                         // If the pointer has expired, remove it from the vector
-                                         if (elem.expired() == true) {
-                                             return true;
-                                         }
+        auto new_end =
+            std::remove_if(this->open_connections_.begin(), this->open_connections_.end(),
+                           [&conn_val](ClientConnection elem) {
+                               // If the pointer has expired, remove it from the vector
+                               if (elem.expired() == true) {
+                                   return true;
+                               }
 
-                                         // If the pointer is still valid, compare it to the handle
-                                         // for the closed connection
-                                         auto elem_val = elem.lock();
-                                         if (elem_val.get() == conn_val.get()) {
-                                             return true;
-                                         }
+                               // If the pointer is still valid, compare it to the handle
+                               // for the closed connection
+                               auto elem_val = elem.lock();
+                               if (elem_val.get() == conn_val.get()) {
+                                   return true;
+                               }
 
-                                         return false;
-                                     });
+                               return false;
+                           });
 
         // Truncate the connections vector to erase the removed elements
         this->open_connections_.resize(std::distance(this->open_connections_.begin(), new_end));

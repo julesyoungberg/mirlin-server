@@ -38,43 +38,44 @@ int main(int argc, char* argv[]) {
         });
     });
 
-    server.message(
-        "subscription_request", [&main_event_loop, &server, &analyzer](ClientConnection conn, const Json::Value& args) {
-            main_event_loop.post([conn, args, &server, &analyzer]() {
-                if (analyzer.busy) {
-                    // TODO: respond with error and disconnect
-                    return;
-                }
+    server.message("subscription_request", [&main_event_loop, &server, &analyzer](
+                                               ClientConnection conn, const Json::Value& args) {
+        main_event_loop.post([conn, args, &server, &analyzer]() {
+            if (analyzer.busy) {
+                // TODO: respond with error and disconnect
+                return;
+            }
 
-                std::clog << "Message payload:" << std::endl;
+            std::clog << "Message payload:" << std::endl;
 
-                auto sample_rate = args["payload"]["sample_rate"].asUInt();
-                std::clog << "sample_rate: " << std::to_string(sample_rate) << std::endl;
+            auto sample_rate = args["payload"]["sample_rate"].asUInt();
+            std::clog << "sample_rate: " << std::to_string(sample_rate) << std::endl;
 
-                std::clog << "\tfeatures:" << std::endl;
-                auto json_features = args["payload"]["features"];
-                std::vector<std::string> features;
+            std::clog << "\tfeatures:" << std::endl;
+            auto json_features = args["payload"]["features"];
+            std::vector<std::string> features;
 
-                for (Json::Value::ArrayIndex i = 0; i != json_features.size(); i++) {
-                    auto feature = json_features[i].asString();
-                    std::clog << "\t\t- " << feature << std::endl;
-                    features.push_back(feature);
-                }
+            for (Json::Value::ArrayIndex i = 0; i != json_features.size(); i++) {
+                auto feature = json_features[i].asString();
+                std::clog << "\t\t- " << feature << std::endl;
+                features.push_back(feature);
+            }
 
-                analyzer.start_session(sample_rate, features);
+            analyzer.start_session(sample_rate, features);
 
-                Json::Value payload;
-                payload["status"] = "ok";
+            Json::Value payload;
+            payload["status"] = "ok";
 
-                Json::Value confirmation;
-                confirmation["payload"] = payload;
+            Json::Value confirmation;
+            confirmation["payload"] = payload;
 
-                std::clog << "Sending subscription confirmation" << std::endl;
-                server.send_message(conn, "subscription_confirmation", confirmation);
-            });
+            std::clog << "Sending subscription confirmation" << std::endl;
+            server.send_message(conn, "subscription_confirmation", confirmation);
         });
+    });
 
-    server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn, const Json::Value& args) {
+    server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn,
+                                                                         const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
             std::clog << "Received audio frame" << std::endl;
 
