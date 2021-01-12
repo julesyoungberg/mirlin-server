@@ -1,4 +1,5 @@
-// stolen from: https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.h
+// stolen from:
+// https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.h
 #ifndef _WEBSOCKET_SERVER
 #define _WEBSOCKET_SERVER
 

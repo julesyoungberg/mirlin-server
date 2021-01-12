@@ -1,9 +1,8 @@
-// adapted from: https://github.com/GiantSteps/MC-Sonaar/blob/master/essentiaRT~/EssentiaOnset.cpp
+// adapted from:
+// https://github.com/GiantSteps/MC-Sonaar/blob/431048b80b86c29d9caac28ee23061cdf1013b13/essentiaRT~/EssentiaSFX.cpp
 #include "Analyzer.hpp"
 
-Analyzer::Analyzer() {
-    essentia::init();
-}
+Analyzer::Analyzer() { essentia::init(); }
 
 void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> features) {
     std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
@@ -18,36 +17,7 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     combine_ms_ = 50;
     peaks_.resize(2);
 
-    // create algorithms
-    AlgorithmFactory& factory = AlgorithmFactory::instance();
-
-    frame_cutter_ = factory.create("FrameCutter", "frameSize", frame_size_, "hopSize", hop_size_,
-                                   "startFromZero", true, "validFrameThresholdRatio", .1,
-                                   "lastFrameToEndOfFile", true, "silentFrames", "keep");
-
-    windowing_ = factory.create("Windowing", "type", "square", "zeroPhase", true);
-
-    spectrum_ = factory.create("Spectrum");
-
-    power_spectrum_ = factory.create("PowerSpectrum");
-
-    triangle_bands_ = factory.create("TriangularBands", "log", false);
-
-    super_flux_novelty_ = factory.create("SuperFluxNovelty", "binWidth", 5, "frameWidth", 1);
-
-    super_flux_peaks_ =
-        factory.create("SuperFluxPeaks", "ratioThreshold", 4, "threshold", .7 / NOVELTY_MULT,
-                       "pre_max", 80, "pre_avg", 120, "frameRate", sample_rate_ * 1.0 / hop_size_,
-                       "combine", combine_ms_);
-
-    super_flux_peaks_->input(0).setAcquireSize(1);
-    super_flux_peaks_->input(0).setReleaseSize(1);
-
-    centroid_ = factory.create("Centroid");
-
-    mfcc_ = factory.create("MFCC", "inputSize", frame_size_ / 2 + 1);
-
-    // sliding buffer for a real time audio stream input
+    // IO
     ring_buffer_ = new RingBufferInput();
     ring_buffer_->declareParameters();
     ParameterMap pars;
@@ -56,79 +26,181 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     ring_buffer_->output(0).setAcquireSize(frame_size_);
     ring_buffer_->output(0).setReleaseSize(frame_size_);
     ring_buffer_->configure();
-
     essout_ = new VectorOutput<std::vector<Real>>();
     essout_->setVector(&peaks_);
 
-    // windowing
+    // setup
+    AlgorithmFactory& factory = AlgorithmFactory::instance();
+    standard::AlgorithmFactory& standard_factory = standard::AlgorithmFactory::instance();
+
+    // create algorithms
+    frame_cutter_ = factory.create("FrameCutter", "frameSize", frame_size_, "hopSize", hop_size_,
+                                   "startFromZero", true, "validFrameThresholdRatio", .1,
+                                   "lastFrameToEndOfFile", true, "silentFrames", "keep");
+    windowing_ = factory.create("Windowing", "type", "square", "zeroPhase", true);
+    envelope_ = factory.create("Envelope");
+
+    // Core
+    centroid_ = factory.create("Centroid");
+    loudness_ = factory.create("InstantPower");
+    spectrum_ = factory.create("Spectrum");
+    flatness_ = factory.create("Flatness");
+    yin_ = factory.create("PitchYinFFT");
+    tc_total_ = factory.create("TCToTotal");
+    mfcc_ = factory.create("MFCC", "inputSize", frame_size_ / 2 + 1);
+    hpcp_ = factory.create("HPCP", "size", 48);
+    spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
+
+    // Aggregation
+    const char* stats[] = {"mean", "var"};
+    aggregator_ =
+        standard_factory.create("PoolAggregator", "defaultStats", arrayToVector<std::string>(stats));
+
+    // connect the algorithms
     ring_buffer_->output("signal") >> frame_cutter_->input("signal");
+    ring_buffer_->output("signal") >> envelope_->input("signal");
+
     frame_cutter_->output("frame") >> windowing_->input("frame");
+    frame_cutter_->output("frame") >> loudness_->input("array");
+
     windowing_->output("frame") >> spectrum_->input("frame");
 
-    // Onset detection
-    spectrum_->output("spectrum") >> triangle_bands_->input("spectrum");
-    triangle_bands_->output("bands") >> super_flux_novelty_->input("bands");
-    super_flux_novelty_->output("differences") >> super_flux_peaks_->input("novelty");
-    super_flux_peaks_->output("peaks") >> essout_->input("data");
-
-    // MFCC
+    spectrum_->output("spectrum") >> flatness_->input("array");
+    spectrum_->output("spectrum") >> yin_->input("spectrum");
     spectrum_->output("spectrum") >> mfcc_->input("spectrum");
-    mfcc_->output("bands") >> DEVNULL;
-
-    // centroid
+    spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
     spectrum_->output("spectrum") >> centroid_->input("array");
 
-    // 2 Pool
-    connectSingleValue(centroid_->output("centroid"), pool_, "i.centroid");
-    connectSingleValue(mfcc_->output("mfcc"), pool_, "i.mfcc");
+    mfcc_->output("bands") >> NOWHERE;
+
+    spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
+    spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
+
+    envelope_->output("signal") >> tc_total_->input("envelope");
+
+    // output
+    flatness_->output("flatness") >> PC(sfx_pool, "noisiness");
+    loudness_->output("power") >> PC(sfx_pool, "loudness");
+    yin_->output("pitch") >> PC(sfx_pool, "f0");
+    yin_->output("pitchConfidence") >> PC(sfx_pool, "f0_fonfidence");
+    mfcc_->output("mfcc") >> PC(sfx_pool, "mfcc");
+    centroid_->output("centroid") >> PC(sfx_pool, "centroid");
+    hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
+
+    tc_total_->output("TCToTotal") >> PC(aggr_pool, "temp_centroid");
+    aggregator_->input("input").set(sfx_pool);
+    aggregator_->output("output").set(aggr_pool);
 
     network_ = new scheduler::Network(ring_buffer_);
-    worker_ = std::thread([this]() { this->network_->run(); });
+    network_->runPrepare();
+    // worker_ = std::thread([this]() { this->network_->run(); });
+}
+
+void Analyzer::clear() {
+    network_->reset();
+    frame_cutter_->reset();
+    ring_buffer_->reset();
+    aggr_pool.clear();
+    sfx_pool.clear();
 }
 
 void Analyzer::end_session() {
-    worker_.join();
+    // worker_.join();
+    clear();
     std::clog << "Analyzer session ended" << std::endl;
     busy = false;
 }
 
-float Analyzer::process_frame(std::vector<float> raw_frame) {
-    peaks_.clear();
-    essout_->setVector(&peaks_);
-
-    // convert floats to reals
-    std::vector<Real> frame(raw_frame.size());
-    for (int i = 0; i < raw_frame.size(); i++) {
-        frame[i] = Real(raw_frame[i]);
-    }
-
+void Analyzer::process_frame(std::vector<Real> frame) {
     ring_buffer_->add(&frame[0], frame.size());
+    std::clog << "processing ring buffer" << std::endl;
     ring_buffer_->process();
+    std::clog << "running network" << std::endl;
+    network_->runStep();
+}
 
-    dynamic_cast<AccumulatorAlgorithm*>(super_flux_peaks_)->finalProduce();
+void Analyzer::aggregate() {
+    aggregator_->compute();
 
-    float val = -1.0f;
-    frame_count_ += frame.size();
+    // rescaling values afterward
+    aggr_pool.set("centroid.mean", aggr_pool.value<Real>("centroid.mean") * sample_rate_ / 2);
+    aggr_pool.set("centroid.var",
+                  aggr_pool.value<Real>("centroid.var") * sample_rate_ * sample_rate_ / 4);
 
-    if (frame_count_ * 1000.0 > combine_ms_ * sample_rate_) {
-        if (peaks_.size() > 0 && peaks_[0].size() > 0) {
-            val = peaks_[0][0];
+    // normalize mfcc
+    if (aggr_pool.contains<std::vector<Real>>("mfcc.mean")) {
+        std::vector<Real> v = aggr_pool.value<std::vector<Real>>("mfcc.mean");
+        float factor = (frame_size_);
+        aggr_pool.remove("mfcc.mean");
+        for (auto& e : v) {
+            aggr_pool.add("mfcc.mean", e * 1.0 / factor);
+        }
 
-            if (val > 0) {
-                val *= NOVELTY_MULT;
-                frame_count_ = 0;
-            }
+        v = aggr_pool.value<std::vector<Real>>("mfcc.var");
+        factor *= factor;
+        aggr_pool.remove("mfcc.var");
+        for (auto& e : v) {
+            aggr_pool.add("mfcc.var", e * 1.0 / factor);
+        }
+    } else if (sfx_pool.contains<std::vector<std::vector<Real>>>("mfcc")) {
+        // only one frame was aquired  ( no aggregation but we still want output!)
+        std::vector<Real> v = sfx_pool.value<std::vector<std::vector<Real>>>("mfcc")[0];
+        float factor = (frame_size_);
+        aggr_pool.removeNamespace("mfcc");
+        aggr_pool.remove("mfcc");
+        for (auto& e : v) {
+            aggr_pool.add("mfcc.mean", e * 1.0 / factor);
+            aggr_pool.add("mfcc.var", 0);
+        }
+
+        v = sfx_pool.value<std::vector<std::vector<Real>>>("hpcp")[0];
+
+        aggr_pool.removeNamespace("hpcp");
+        aggr_pool.remove("hpcp");
+        for (auto& e : v) {
+            aggr_pool.add("hpcp.mean", e);
+            aggr_pool.add("hpcp.var", 0);
         }
     }
+}
 
-    // pool_.set("i.centroid", pool_.value<Real>("i.centroid")* sample_rate_ / 2);
-    // std::vector<Real> v = pool_.value<std::vector<Real>>("i.mfcc");
-    // for (auto& e : v) {
-    //     e /= (frame_size_ / 2 + 1);
-    // }
-    // pool_.set("i.mfcc", v);
-    // peaks_.clear();
-    // essout_->setVector(&peaks_);
+Features Analyzer::extract_features(const Pool& p) {
+    Features vectors_out;
 
-    return val;
+    Features vectors_in = p.getRealPool();
+    for (auto const& iter : vectors_in) {
+        std::string k = iter.first;
+        std::vector<Real> v = (iter.second);
+        vectors_out[k] = v;
+    }
+
+    Features reals_in = p.getSingleVectorRealPool();
+    for (auto const& iter : reals_in) {
+        std::string k = iter.first;
+        std::vector<Real> v = iter.second;
+        vectors_out[k] = v;
+    }
+
+    auto reals2_in = p.getSingleRealPool();
+    for (auto const& iter : reals2_in) {
+        std::string k = iter.first;
+        std::vector<Real> v = std::vector<Real>(1, iter.second);
+        vectors_out[k] = v;
+    }
+
+    return vectors_out;
+}
+
+Features Analyzer::get_features() {
+    if (sfx_pool.getRealPool().size() < 1) {
+        return std::map<std::string, std::vector<Real>>();
+    }
+
+    aggregate();
+
+    auto features = extract_features(aggr_pool);
+
+    clear();
+
+    return features;
 }

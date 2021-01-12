@@ -1,4 +1,5 @@
-// stolen from: https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.cpp
+// stolen from:
+// https://github.com/adamrehn/websocket-server-demo/blob/master/server/WebsocketServer.cpp
 #include <algorithm>
 #include <functional>
 #include <iostream>

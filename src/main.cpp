@@ -6,7 +6,6 @@
 #include "Analyzer.hpp"
 #include "WebsocketServer.hpp"
 
-// The port number the WebSocket server listens on
 #define PORT_NUMBER 9002
 
 int main(int argc, char* argv[]) {
@@ -76,8 +75,6 @@ int main(int argc, char* argv[]) {
     server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn,
                                                                          const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
-            std::clog << "Received audio frame" << std::endl;
-
             auto json_frame = args["payload"];
             std::vector<float> frame;
 
@@ -86,14 +83,30 @@ int main(int argc, char* argv[]) {
                 frame.push_back(sample);
             }
 
-            float onset_strength = analyzer.process_frame(frame);
+            std::clog << "Received audio frame of size " << frame.size() << std::endl;
+            analyzer.process_frame(frame);
+            std::clog << "getting features" << std::endl;
+            auto features = analyzer.get_features();
 
-            Json::Value features;
-            features["onset"] = onset_strength > 0;
-            features["pitch"] = "C";
+            std::clog << "reading features" << std::endl;
+            Json::Value json_features;
+            int count = 0;
+            for (auto const& iter : features) {
+                std::string feature = iter.first;
+                std::vector<Real> vec = iter.second;
+
+                Json::Value feature_vec;
+                for (int i = 0; i < vec.size(); i++) {
+                    feature_vec[i] = vec[i];
+                }
+
+                json_features[feature] = feature_vec;
+                count++;
+            }
+            std::clog << "num features: " << count << std::endl;
 
             Json::Value payload;
-            payload["features"] = features;
+            payload["features"] = json_features;
 
             Json::Value features_msg;
             features_msg["payload"] = payload;
