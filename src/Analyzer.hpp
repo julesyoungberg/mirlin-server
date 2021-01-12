@@ -7,7 +7,7 @@
 #include <essentia/essentiamath.h>
 #include <essentia/pool.h>
 
-using namespace essentia::standard;
+using namespace essentia::streaming;
 
 // TODO: use essentia to extract features from audio
 // https://essentia.upf.edu/howto_standard_extractor.html
@@ -19,8 +19,9 @@ class Analyzer {
 public:
     Analyzer() {}
 
-    void start_session(std::vector<std::string> features) {
-        std::clog << "Analyzer session initiated" << std::endl;
+    void start_session(unsigned int sample_rate, std::vector<std::string> features) {
+        std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate) << std::endl;
+        this->sample_rate_ = sample_rate;
         this->features_ = features;
         this->busy = true;
     }
@@ -37,6 +38,7 @@ public:
     bool busy = false;
 
 private:
+    unsigned int sample_rate_;
     std::vector<std::string> features_;
 };
 

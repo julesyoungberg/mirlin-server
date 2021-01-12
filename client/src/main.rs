@@ -12,6 +12,25 @@ use websocket::OwnedMessage;
 const CONNECTION: &'static str = "ws://127.0.0.1:9002";
 
 fn run() {
+    println!("configuring audio input device");
+
+    // get audio device
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .expect("no audio input device available");
+
+    // get supported config
+    let mut supported_configs_range = device
+        .supported_input_configs()
+        .expect("error while querying audio configs");
+    let supported_config = supported_configs_range
+        .next()
+        .expect("no supported audio config?!")
+        .with_max_sample_rate();
+    let cpal::SampleRate(sample_rate) = supported_config.sample_rate();
+    println!("sample_rate: {:?}", sample_rate);
+
     println!("Connecting to {}", CONNECTION);
 
     let client = ClientBuilder::new(CONNECTION)
@@ -20,8 +39,6 @@ fn run() {
         .connect_insecure()
         .unwrap();
 
-    println!("Successfully connected");
-
     let (mut receiver, mut sender) = client.split().unwrap();
 
     // build subscription request
@@ -29,8 +46,11 @@ fn run() {
         "type": "subscription_request",
         "payload": {
             "features": ["onset", "pitch"],
+            "sample_rate": sample_rate,
         }
     });
+
+    println!("Requesting subscription {:?}", subscription_request);
 
     // request subscription
     let request_message = OwnedMessage::Text(subscription_request.to_string());
@@ -41,6 +61,8 @@ fn run() {
             return;
         }
     }
+
+    println!("Confirming subscription");
 
     // wait for a confirmation from the server
     let confirmation_msg = match receiver.recv_message() {
@@ -61,24 +83,7 @@ fn run() {
     };
 
     // successful confirmation
-    println!("confirmation: {:?}", confirmation);
-
-    println!("configuring audio input device");
-
-    // get audio device
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .expect("no audio input device available");
-
-    // get supported config
-    let mut supported_configs_range = device
-        .supported_input_configs()
-        .expect("error while querying audio configs");
-    let supported_config = supported_configs_range
-        .next()
-        .expect("no supported audio config?!")
-        .with_max_sample_rate();
+    println!("confirmation received: {:?}", confirmation);
 
     let (tx, rx) = channel();
     let tx_1 = tx.clone();
