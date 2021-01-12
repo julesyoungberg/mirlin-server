@@ -49,5 +49,5 @@ include_directories(SYSTEM "/usr/include/qt4/QtCore")
 add_library(jsoncpp STATIC ${PROJECT_SOURCE_DIR}/../external/jsoncpp.cpp)
 
 # Build the server executable
-add_executable(server main.cpp WebsocketServer.cpp)
+add_executable(server main.cpp WebsocketServer.cpp Analyzer.cpp)
 target_link_libraries (server jsoncpp)
