@@ -53,13 +53,12 @@ private:
     /// algos
     streaming::Algorithm* spectrum_;
     streaming::Algorithm* triangle_bands_;
-    streaming::Algorithm* super_flux_novelty_;
+    streaming::Algorithm* super_flux_extractor_;
     streaming::Algorithm* frame_cutter_;
     streaming::Algorithm* centroid_;
     streaming::Algorithm* mfcc_;
     streaming::Algorithm* power_spectrum_;
     streaming::Algorithm* windowing_;
-    streaming::Algorithm* super_flux_peaks_;
     //// IO
     streaming::VectorOutput<std::vector<Real>>* essout_;
     RingBufferInput* ring_buffer_;
