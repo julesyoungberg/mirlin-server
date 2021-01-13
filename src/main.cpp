@@ -48,7 +48,13 @@ int main(int argc, char* argv[]) {
             std::clog << "Message payload:" << std::endl;
 
             auto sample_rate = args["payload"]["sample_rate"].asUInt();
-            std::clog << "\tsample_rate: " << std::to_string(sample_rate) << std::endl;
+            std::clog << "\tsample_rate: " << sample_rate << std::endl;
+
+            auto hop_size = args["payload"]["hop_size"].asUInt();
+            std::clog << "\thop_size: " << hop_size << std::endl;
+
+            auto memory = args["payload"]["memory"].asUInt();
+            std::clog << "\tmemory: " << memory << std::endl;
 
             std::clog << "\tfeatures:" << std::endl;
             auto json_features = args["payload"]["features"];
@@ -60,7 +66,7 @@ int main(int argc, char* argv[]) {
                 features.push_back(feature);
             }
 
-            analyzer.start_session(sample_rate, features);
+            analyzer.start_session(sample_rate, hop_size, memory, features);
 
             Json::Value payload;
             payload["status"] = "ok";

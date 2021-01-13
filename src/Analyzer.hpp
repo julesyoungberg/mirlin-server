@@ -29,8 +29,9 @@ using namespace streaming;
 class Analyzer {
 public:
     Analyzer();
+    ~Analyzer();
 
-    void start_session(unsigned int sample_rate, std::vector<std::string> features);
+    void start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
 
     void end_session();
 
@@ -40,34 +41,36 @@ public:
 
 private:
     unsigned int sample_rate_;
-    unsigned int frame_size_;
     unsigned int hop_size_;
+    unsigned int memory_;
+    unsigned int window_size_;
     unsigned int frame_count_;
 
     float combine_ms_;
 
+    std::vector<std::vector<Real>> frames_;
+    std::vector<Real> window_;
     std::vector<std::string> features_;
     std::vector<std::vector<Real>> peaks_;
 
     /// ESSENTIA
     /// algos
-    streaming::Algorithm* spectrum_;
-    streaming::Algorithm* triangle_bands_;
-    streaming::Algorithm* super_flux_extractor_;
-    streaming::Algorithm* frame_cutter_;
-    streaming::Algorithm* centroid_;
-    streaming::Algorithm* mfcc_;
-    streaming::Algorithm* power_spectrum_;
-    streaming::Algorithm* windowing_;
+    Algorithm* spectrum_;
+    Algorithm* triangle_bands_;
+    Algorithm* super_flux_novelty_;
+    Algorithm* super_flux_peaks_;
+    Algorithm* frame_cutter_;
+    Algorithm* centroid_;
+    Algorithm* mfcc_;
+    Algorithm* power_spectrum_;
+    Algorithm* windowing_;
     //// IO
-    streaming::VectorOutput<std::vector<Real>>* essout_;
-    RingBufferInput* ring_buffer_;
+    VectorOutput<std::vector<Real>>* essout_;
+    VectorInput<Real>* gen_;
 
     Pool pool_;
 
     scheduler::Network* network_ = NULL;
-
-    std::thread worker_;
 };
 
 #endif

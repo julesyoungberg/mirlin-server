@@ -5,23 +5,29 @@ Analyzer::Analyzer() {
     essentia::init();
 }
 
-void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> features) {
-    std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
+Analyzer::~Analyzer() {
+    end_session();
+}
+
+void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
+    std::clog << "Analyzer session initiated with sample rate: " << sample_rate
               << std::endl;
     sample_rate_ = sample_rate;
     features_ = features;
     busy = true;
-    frame_size_ = 1024;
-    hop_size_ = 512;
+    hop_size_ = hop_size;
+    memory_ = memory;
+    window_size_ = hop_size * memory;
     frame_count_ = 0;
 
     combine_ms_ = 50;
     peaks_.resize(2);
+    window_.resize(window_size_);
 
     // create algorithms
     AlgorithmFactory& factory = AlgorithmFactory::instance();
 
-    frame_cutter_ = factory.create("FrameCutter", "frameSize", frame_size_, "hopSize", hop_size_,
+    frame_cutter_ = factory.create("FrameCutter", "frameSize", window_size_, "hopSize", hop_size_,
                                    "startFromZero", true, "validFrameThresholdRatio", .1,
                                    "lastFrameToEndOfFile", true, "silentFrames", "keep");
 
@@ -45,23 +51,16 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
 
     centroid_ = factory.create("Centroid");
 
-    mfcc_ = factory.create("MFCC", "inputSize", frame_size_ / 2 + 1);
+    mfcc_ = factory.create("MFCC", "inputSize", window_size_ / 2 + 1);
 
-    // sliding buffer for a real time audio stream input
-    ring_buffer_ = new RingBufferInput();
-    ring_buffer_->declareParameters();
-    ParameterMap pars;
-    pars.add("bufferSize", frame_size_);
-    ring_buffer_->setParameters(pars);
-    ring_buffer_->output(0).setAcquireSize(frame_size_);
-    ring_buffer_->output(0).setReleaseSize(frame_size_);
-    ring_buffer_->configure();
+    gen_ = new VectorInput<Real>();
+    gen_->setVector(&window_);
 
     essout_ = new VectorOutput<std::vector<Real>>();
     essout_->setVector(&peaks_);
 
     // windowing
-    ring_buffer_->output("signal") >> frame_cutter_->input("signal");
+    gen_->output("data") >> frame_cutter_->input("signal");
     frame_cutter_->output("frame") >> windowing_->input("frame");
     windowing_->output("frame") >> spectrum_->input("frame");
 
@@ -82,17 +81,26 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     connectSingleValue(centroid_->output("centroid"), pool_, "i.centroid");
     connectSingleValue(mfcc_->output("mfcc"), pool_, "i.mfcc");
 
-    network_ = new scheduler::Network(ring_buffer_);
-    worker_ = std::thread([this]() { this->network_->run(); });
+    network_ = new scheduler::Network(gen_);
 }
 
 void Analyzer::end_session() {
-    worker_.join();
     std::clog << "Analyzer session ended" << std::endl;
+    delete spectrum_;
+    delete triangle_bands_;
+    delete super_flux_novelty_;
+    delete super_flux_peaks_;
+    delete frame_cutter_;
+    delete centroid_;
+    delete mfcc_;
+    delete power_spectrum_;
+    delete windowing_;
+    delete network_;
     busy = false;
 }
 
 float Analyzer::process_frame(std::vector<float> raw_frame) {
+    std::clog << "Received frame of size " << raw_frame.size() << std::endl;
     peaks_.clear();
     essout_->setVector(&peaks_);
 
@@ -102,29 +110,51 @@ float Analyzer::process_frame(std::vector<float> raw_frame) {
         frame[i] = Real(raw_frame[i]);
     }
 
-    ring_buffer_->add(&frame[0], frame.size());
-    ring_buffer_->process();
+    // add frame to memory and remove the oldest if needed
+    frames_.push_back(frame);
+    if (frames_.size() > memory_) {
+        frames_.erase(frames_.begin());
+    }
 
-    dynamic_cast<AccumulatorAlgorithm*>(super_flux_peaks_)->finalProduce();
+    // create window from frame memory
+    std::fill(window_.begin(), window_.end(), 0);
+    for (int f = 0; f < frames_.size(); f++) {
+        for (int i = 0; i < hop_size_; i++) {
+            window_[f * hop_size_ + i] = frames_[f][i];
+        }
+    }
 
+    gen_->setVector(&window_);
+
+    // std::clog << "processing window" << std::endl;
+    // gen_->process();
+
+    std::clog << "running network" << std::endl;
+    network_->run();
+
+    // std::clog << "final produce" << std::endl;
+    // dynamic_cast<AccumulatorAlgorithm*>(super_flux_peaks_)->finalProduce();
+    // std::clog << "output buffer size: " << peaks_.size() << std::endl;
+
+    std::clog << "done" << std::endl;
     float val = -1.0f;
     frame_count_ += frame.size();
 
-    if (frame_count_ * 1000.0 > combine_ms_ * sample_rate_) {
-        if (peaks_.size() > 0 && peaks_[0].size() > 0) {
-            val = peaks_[0][0];
+    // if (frame_count_ * 1000.0 > combine_ms_ * sample_rate_) {
+    //     if (peaks_.size() > 0 && peaks_[0].size() > 0) {
+    //         val = peaks_[0][0];
 
-            if (val > 0) {
-                val *= NOVELTY_MULT;
-                frame_count_ = 0;
-            }
-        }
-    }
+    //         if (val > 0) {
+    //             val *= NOVELTY_MULT;
+    //             frame_count_ = 0;
+    //         }
+    //     }
+    // }
 
     // pool_.set("i.centroid", pool_.value<Real>("i.centroid")* sample_rate_ / 2);
     // std::vector<Real> v = pool_.value<std::vector<Real>>("i.mfcc");
     // for (auto& e : v) {
-    //     e /= (frame_size_ / 2 + 1);
+    //     e /= (window_size_ / 2 + 1);
     // }
     // pool_.set("i.mfcc", v);
     // peaks_.clear();

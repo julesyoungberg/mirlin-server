@@ -47,7 +47,9 @@ fn run() {
         "payload": {
             "features": ["onset", "pitch"],
             "sample_rate": sample_rate,
-        }
+            "hop_size": 512 as u32, // happens to be cpal's buffer size
+            "memory": 4 as u32, // rember 4 frames including current
+        },
     });
 
     println!("Requesting subscription {:?}", subscription_request);
