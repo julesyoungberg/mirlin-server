@@ -45,7 +45,7 @@ fn run() {
     let subscription_request = json!({
         "type": "subscription_request",
         "payload": {
-            "features": ["onset", "pitch"],
+            "features": ["centroid", "loudness", "noisiness", "pitch"],
             "sample_rate": sample_rate,
             "hop_size": 512 as u32, // happens to be cpal's buffer size
             "memory": 4 as u32, // rember 4 frames including current

@@ -91,10 +91,8 @@ int main(int argc, char* argv[]) {
 
             std::clog << "Received audio frame of size " << frame.size() << std::endl;
             analyzer.process_frame(frame);
-            std::clog << "getting features" << std::endl;
             auto features = analyzer.get_features();
 
-            std::clog << "reading features" << std::endl;
             Json::Value json_features;
             for (auto const& iter : features) {
                 std::string feature = iter.first;

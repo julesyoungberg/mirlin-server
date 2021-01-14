@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <map>
+#include <algorithm>
 
 #include <essentia/algorithmfactory.h>
 #include <essentia/essentiamath.h>
@@ -22,11 +23,13 @@ using namespace streaming;
 
 #define NOVELTY_MULT 1000000
 
+typedef std::map<std::string, bool> FeatureSubscription;
 typedef std::map<std::string, std::vector<Real>> Features;
 
 class Analyzer {
 public:
     Analyzer();
+    ~Analyzer();
 
     void start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
 
@@ -41,6 +44,7 @@ public:
     Pool sfx_pool;
 
 private:
+    void configure_subscription(std::vector<std::string> features);
     void clear();
     void aggregate();
     Features extract_features(const Pool& p);
@@ -50,6 +54,8 @@ private:
     unsigned int memory_;
     unsigned int window_size_;
     unsigned int frame_count_;
+
+    FeatureSubscription subscription_;
 
     float combine_ms_;
 

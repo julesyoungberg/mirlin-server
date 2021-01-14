@@ -4,7 +4,25 @@
 
 Analyzer::Analyzer() { essentia::init(); }
 
+Analyzer::~Analyzer() {}
+
+void Analyzer::configure_subscription(std::vector<std::string> features) {
+    // initialize default feature subscription with all falses
+    subscription_ = FeatureSubscription();
+    subscription_["centroid"] = false;
+    subscription_["loudness"] = false;
+    subscription_["noisiness"] = false;
+    subscription_["pitch"] = false;
+    subscription_["mfcc"] = false;
+    subscription_["hpcp"] = false;
+    // insert true values for features provided
+    for (auto const& feature : features) {
+        subscription_[feature] = true;
+    }
+}
+
 void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
+    configure_subscription(features);
     std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
               << std::endl;
     sample_rate_ = sample_rate;
@@ -33,14 +51,33 @@ void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, un
     windowing_ = factory.create("Windowing", "type", "square", "zeroPhase", true);
 
     // Core
-    centroid_ = factory.create("Centroid");
-    loudness_ = factory.create("InstantPower");
     spectrum_ = factory.create("Spectrum");
-    flatness_ = factory.create("Flatness");
-    yin_ = factory.create("PitchYinFFT");
-    mfcc_ = factory.create("MFCC", "inputSize", window_size_ / 2 + 1);
-    hpcp_ = factory.create("HPCP", "size", 48);
-    spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
+
+    // features
+    if (subscription_["centroid"]) {
+        centroid_ = factory.create("Centroid");
+    }
+
+    if (subscription_["loudness"]) {
+        loudness_ = factory.create("InstantPower");
+    }
+    
+    if (subscription_["noisiness"]) {
+        flatness_ = factory.create("Flatness");
+    }
+
+    if (subscription_["pitch"]) {
+        yin_ = factory.create("PitchYinFFT");
+    }
+
+    if (subscription_["mfcc"]) {
+        mfcc_ = factory.create("MFCC", "inputSize", window_size_ / 2 + 1);
+    }
+
+    if (subscription_["hpcp"]) {
+        spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
+        hpcp_ = factory.create("HPCP", "size", 48);
+    }
 
     // Aggregation
     const char* stats[] = {"mean", "var"};
@@ -49,35 +86,45 @@ void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, un
 
     // connect the algorithms
     gen_->output("data") >> frame_cutter_->input("signal");
-
     frame_cutter_->output("frame") >> windowing_->input("frame");
-    frame_cutter_->output("frame") >> loudness_->input("array");
-
     windowing_->output("frame") >> spectrum_->input("frame");
 
-    spectrum_->output("spectrum") >> flatness_->input("array");
-    spectrum_->output("spectrum") >> yin_->input("spectrum");
-    spectrum_->output("spectrum") >> mfcc_->input("spectrum");
-    spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
-    spectrum_->output("spectrum") >> centroid_->input("array");
+    if (subscription_["centroid"]) {
+        spectrum_->output("spectrum") >> centroid_->input("array");
+        centroid_->output("centroid") >> PC(sfx_pool, "centroid");
+    }
 
-    mfcc_->output("bands") >> NOWHERE;
+    if (subscription_["loudness"]) {
+        frame_cutter_->output("frame") >> loudness_->input("array");
+        loudness_->output("power") >> PC(sfx_pool, "loudness");
+    }
 
-    spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
-    spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
+    if (subscription_["noisiness"]) {
+        spectrum_->output("spectrum") >> flatness_->input("array");
+        flatness_->output("flatness") >> PC(sfx_pool, "noisiness");
+    }
 
-    // output
-    flatness_->output("flatness") >> PC(sfx_pool, "noisiness");
-    loudness_->output("power") >> PC(sfx_pool, "loudness");
-    yin_->output("pitch") >> PC(sfx_pool, "f0");
-    yin_->output("pitchConfidence") >> PC(sfx_pool, "f0_fonfidence");
-    mfcc_->output("mfcc") >> PC(sfx_pool, "mfcc");
-    centroid_->output("centroid") >> PC(sfx_pool, "centroid");
-    hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
+    if (subscription_["pitch"]) {
+        spectrum_->output("spectrum") >> yin_->input("spectrum");
+        yin_->output("pitch") >> PC(sfx_pool, "f0");
+        yin_->output("pitchConfidence") >> PC(sfx_pool, "f0_fonfidence");
+    }
+
+    if (subscription_["mfcc"]) {
+        spectrum_->output("spectrum") >> mfcc_->input("spectrum");
+        mfcc_->output("bands") >> NOWHERE;
+        mfcc_->output("mfcc") >> PC(sfx_pool, "mfcc");
+    }
+
+    if (subscription_["hpcp"]) {
+        spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
+        spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
+        spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
+        hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
+    }
 
     aggregator_->input("input").set(sfx_pool);
     aggregator_->output("output").set(aggr_pool);
-
     network_ = new scheduler::Network(gen_);
 }
 
