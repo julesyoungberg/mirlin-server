@@ -4,41 +4,33 @@
 
 Analyzer::Analyzer() { essentia::init(); }
 
-void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> features) {
+void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
     std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
               << std::endl;
     sample_rate_ = sample_rate;
     features_ = features;
     busy = true;
-    frame_size_ = 1024;
-    hop_size_ = 512;
+    hop_size_ = hop_size;
+    memory_ = memory;
+    window_size_ = hop_size * memory;
     frame_count_ = 0;
 
     combine_ms_ = 50;
-    peaks_.resize(2);
+    window_.resize(window_size_);
 
-    // IO
-    ring_buffer_ = new RingBufferInput();
-    ring_buffer_->declareParameters();
-    ParameterMap pars;
-    pars.add("bufferSize", frame_size_);
-    ring_buffer_->setParameters(pars);
-    ring_buffer_->output(0).setAcquireSize(frame_size_);
-    ring_buffer_->output(0).setReleaseSize(frame_size_);
-    ring_buffer_->configure();
-    essout_ = new VectorOutput<std::vector<Real>>();
-    essout_->setVector(&peaks_);
+    // input
+    gen_ = new VectorInput<Real>();
+    gen_->setVector(&window_);
 
     // setup
     AlgorithmFactory& factory = AlgorithmFactory::instance();
     standard::AlgorithmFactory& standard_factory = standard::AlgorithmFactory::instance();
 
     // create algorithms
-    frame_cutter_ = factory.create("FrameCutter", "frameSize", frame_size_, "hopSize", hop_size_,
+    frame_cutter_ = factory.create("FrameCutter", "frameSize", window_size_, "hopSize", hop_size_,
                                    "startFromZero", true, "validFrameThresholdRatio", .1,
                                    "lastFrameToEndOfFile", true, "silentFrames", "keep");
     windowing_ = factory.create("Windowing", "type", "square", "zeroPhase", true);
-    envelope_ = factory.create("Envelope");
 
     // Core
     centroid_ = factory.create("Centroid");
@@ -46,8 +38,7 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     spectrum_ = factory.create("Spectrum");
     flatness_ = factory.create("Flatness");
     yin_ = factory.create("PitchYinFFT");
-    tc_total_ = factory.create("TCToTotal");
-    mfcc_ = factory.create("MFCC", "inputSize", frame_size_ / 2 + 1);
+    mfcc_ = factory.create("MFCC", "inputSize", window_size_ / 2 + 1);
     hpcp_ = factory.create("HPCP", "size", 48);
     spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
 
@@ -57,8 +48,7 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
         standard_factory.create("PoolAggregator", "defaultStats", arrayToVector<std::string>(stats));
 
     // connect the algorithms
-    ring_buffer_->output("signal") >> frame_cutter_->input("signal");
-    ring_buffer_->output("signal") >> envelope_->input("signal");
+    gen_->output("data") >> frame_cutter_->input("signal");
 
     frame_cutter_->output("frame") >> windowing_->input("frame");
     frame_cutter_->output("frame") >> loudness_->input("array");
@@ -76,8 +66,6 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
     spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
 
-    envelope_->output("signal") >> tc_total_->input("envelope");
-
     // output
     flatness_->output("flatness") >> PC(sfx_pool, "noisiness");
     loudness_->output("power") >> PC(sfx_pool, "loudness");
@@ -87,36 +75,44 @@ void Analyzer::start_session(unsigned int sample_rate, std::vector<std::string> 
     centroid_->output("centroid") >> PC(sfx_pool, "centroid");
     hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
 
-    tc_total_->output("TCToTotal") >> PC(aggr_pool, "temp_centroid");
     aggregator_->input("input").set(sfx_pool);
     aggregator_->output("output").set(aggr_pool);
 
-    network_ = new scheduler::Network(ring_buffer_);
-    network_->runPrepare();
-    // worker_ = std::thread([this]() { this->network_->run(); });
+    network_ = new scheduler::Network(gen_);
 }
 
 void Analyzer::clear() {
     network_->reset();
     frame_cutter_->reset();
-    ring_buffer_->reset();
+    std::fill(window_.begin(), window_.end(), 0);
+    gen_->setVector(&window_);
     aggr_pool.clear();
     sfx_pool.clear();
 }
 
 void Analyzer::end_session() {
-    // worker_.join();
     clear();
     std::clog << "Analyzer session ended" << std::endl;
     busy = false;
 }
 
 void Analyzer::process_frame(std::vector<Real> frame) {
-    ring_buffer_->add(&frame[0], frame.size());
-    std::clog << "processing ring buffer" << std::endl;
-    ring_buffer_->process();
-    std::clog << "running network" << std::endl;
-    network_->runStep();
+    frames_.push_back(frame);
+    if (frames_.size() > memory_) {
+        frames_.erase(frames_.begin());
+    }
+
+    // create window from frame memory
+    std::fill(window_.begin(), window_.end(), 0);
+    for (int f = 0; f < frames_.size(); f++) {
+        for (int i = 0; i < hop_size_; i++) {
+            window_[f * hop_size_ + i] = frames_[f][i];
+        }
+    }
+
+    gen_->setVector(&window_);
+    gen_->process();
+    network_->run();
 }
 
 void Analyzer::aggregate() {
@@ -130,7 +126,7 @@ void Analyzer::aggregate() {
     // normalize mfcc
     if (aggr_pool.contains<std::vector<Real>>("mfcc.mean")) {
         std::vector<Real> v = aggr_pool.value<std::vector<Real>>("mfcc.mean");
-        float factor = (frame_size_);
+        float factor = (window_size_);
         aggr_pool.remove("mfcc.mean");
         for (auto& e : v) {
             aggr_pool.add("mfcc.mean", e * 1.0 / factor);
@@ -145,7 +141,7 @@ void Analyzer::aggregate() {
     } else if (sfx_pool.contains<std::vector<std::vector<Real>>>("mfcc")) {
         // only one frame was aquired  ( no aggregation but we still want output!)
         std::vector<Real> v = sfx_pool.value<std::vector<std::vector<Real>>>("mfcc")[0];
-        float factor = (frame_size_);
+        float factor = (window_size_);
         aggr_pool.removeNamespace("mfcc");
         aggr_pool.remove("mfcc");
         for (auto& e : v) {
