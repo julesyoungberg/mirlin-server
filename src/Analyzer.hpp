@@ -55,17 +55,18 @@ private:
 
     /// ESSENTIA
     /// algos
-    Algorithm* spectrum_;
-    Algorithm* triangle_bands_;
-    Algorithm* super_flux_novelty_;
-    Algorithm* super_flux_peaks_;
     Algorithm* frame_cutter_;
-    Algorithm* centroid_;
-    Algorithm* mfcc_;
-    Algorithm* power_spectrum_;
     Algorithm* windowing_;
+    Algorithm* spectrum_;
+    Algorithm* mfcc_;
+    Algorithm* centroid_;
+    // onset detection
+    // Algorithm* power_spectrum_;
+    // Algorithm* triangle_bands_;
+    // Algorithm* super_flux_novelty_;
+    // Algorithm* super_flux_peaks_;
     //// IO
-    VectorOutput<std::vector<Real>>* essout_;
+    // VectorOutput<std::vector<Real>>* essout_;
     VectorInput<Real>* gen_;
 
     Pool pool_;
