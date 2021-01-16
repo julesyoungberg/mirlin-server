@@ -6,6 +6,8 @@ Analyzer::Analyzer() { essentia::init(); }
 
 Analyzer::~Analyzer() {}
 
+// TODO add
+// Tempo maybe CNN, onset detection, Dissonance, 
 void Analyzer::configure_subscription(std::vector<std::string> features) {
     // initialize default feature subscription with all falses
     subscription_ = FeatureSubscription();

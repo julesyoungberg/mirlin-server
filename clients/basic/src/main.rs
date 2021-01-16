@@ -1,11 +1,9 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde_json;
 use serde_json::{json, Value};
-use std::panic;
 use std::string::ToString;
 use std::sync::mpsc::channel;
 use std::thread;
-use std::time;
 use websocket::client::ClientBuilder;
 use websocket::OwnedMessage;
 
