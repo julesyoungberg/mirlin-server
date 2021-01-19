@@ -9,7 +9,7 @@ use websocket::OwnedMessage;
 
 const CONNECTION: &'static str = "ws://127.0.0.1:9002";
 
-fn run() {
+fn main() {
     println!("configuring audio input device");
 
     // get audio device
@@ -119,7 +119,6 @@ fn run() {
         .unwrap();
 
     stream.play().unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(3));
 
     // Receive loop
     let receive_loop = thread::spawn(move || {
@@ -143,7 +142,6 @@ fn run() {
             };
 
             println!("received: {:?}", value);
-            // TODO: do something awesome with the data
         }
     });
 
@@ -166,13 +164,4 @@ fn run() {
     println!("closing stream");
     drop(stream);
     let _ = receive_loop.join();
-}
-
-fn main() {
-    run();
-    // loop {
-    //     let _result = panic::catch_unwind(run);
-    //     println!("Sleeping for 10 seconds...");
-    //     thread::sleep(time::Duration::from_secs(10));
-    // }
 }
