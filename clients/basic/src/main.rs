@@ -40,8 +40,8 @@ fn main() {
     let (mut receiver, mut sender) = client.split().unwrap();
 
     // build subscription request
-    let subscription_request = json!({
-        "type": "subscription_request",
+    let session_request = json!({
+        "type": "session_request",
         "payload": {
             "features": ["centroid", "loudness", "noisiness", "pitch"],
             "sample_rate": sample_rate,
@@ -50,10 +50,10 @@ fn main() {
         }
     });
 
-    println!("Requesting subscription {:?}", subscription_request);
+    println!("Requesting subscription {:?}", session_request);
 
     // request subscription
-    let request_message = OwnedMessage::Text(subscription_request.to_string());
+    let request_message = OwnedMessage::Text(session_request.to_string());
     match sender.send_message(&request_message) {
         Ok(()) => (),
         Err(e) => {
@@ -164,4 +164,14 @@ fn main() {
     println!("closing stream");
     drop(stream);
     let _ = receive_loop.join();
+
+    // let session_end = json!({ "type": "session_end" });
+    // let end_message = OwnedMessage::Text(session_end.to_string());
+    // match sender.send_message(&end_message) {
+    //     Ok(()) => (),
+    //     Err(e) => {
+    //         println!("Error requesting subscription: {:?}", e);
+    //         return;
+    //     }
+    // }
 }

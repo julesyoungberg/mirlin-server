@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
         });
     });
 
-    server.message("subscription_request", [&main_event_loop, &server, &analyzer](
+    server.message("session_request", [&main_event_loop, &server, &analyzer](
                                                ClientConnection conn, const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
             if (analyzer.busy) {
@@ -78,6 +78,17 @@ int main(int argc, char* argv[]) {
         });
     });
 
+    // TODO make sure the correct client is requesting to close the session
+    server.message("session_end", [&main_event_loop, &analyzer](
+                                               ClientConnection conn, const Json::Value& args) {
+        main_event_loop.post([&analyzer]() {
+            if (analyzer.busy) {
+                analyzer.end_session();
+            }
+        });
+    });
+
+    // TODO make sure the correct client is sending a frame
     server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn,
                                                                          const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
