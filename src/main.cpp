@@ -32,14 +32,13 @@ int main(int argc, char* argv[]) {
                       << std::endl;
 
             analyzer.end_session();
-            analyzer = Analyzer();
         });
     });
 
     server.message("session_request", [&main_event_loop, &server, &analyzer](
                                                ClientConnection conn, const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
-            if (analyzer.busy) {
+            if (analyzer.is_busy()) {
                 // TODO: respond with error and disconnect
                 return;
             }
@@ -82,7 +81,7 @@ int main(int argc, char* argv[]) {
     server.message("session_end", [&main_event_loop, &analyzer](
                                                ClientConnection conn, const Json::Value& args) {
         main_event_loop.post([&analyzer]() {
-            if (analyzer.busy) {
+            if (analyzer.is_busy()) {
                 analyzer.end_session();
             }
         });

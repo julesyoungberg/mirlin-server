@@ -5,7 +5,11 @@
 #include <thread>
 #include <vector>
 #include <map>
+#include <thread>
 #include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <mutex>
 
 #include <essentia/algorithmfactory.h>
 #include <essentia/essentiamath.h>
@@ -31,6 +35,8 @@ public:
     Analyzer();
     ~Analyzer();
 
+    bool is_busy();
+
     void start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
 
     void end_session();
@@ -39,16 +45,18 @@ public:
 
     Features get_features();
 
-    bool busy = false;
     Pool aggr_pool;
     Pool sfx_pool;
 
 private:
     void configure_subscription(std::vector<std::string> features);
+    void timer();
     void clear();
+    void end();
     void aggregate();
     Features extract_features(const Pool& p);
 
+    bool busy_ = false;
     unsigned int sample_rate_;
     unsigned int hop_size_;
     unsigned int memory_;
@@ -81,6 +89,10 @@ private:
     essentia::standard::Algorithm* aggregator_;
 
     scheduler::Network* network_ = NULL;
+
+    std::thread timer_thread_;
+    std::chrono::time_point<std::chrono::system_clock> last_frame_;
+    std::mutex mutex_;
 };
 
 #endif

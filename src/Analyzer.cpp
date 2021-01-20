@@ -23,13 +23,18 @@ void Analyzer::configure_subscription(std::vector<std::string> features) {
     }
 }
 
+bool Analyzer::is_busy() {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return busy_;
+}
+
 void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
     configure_subscription(features);
     std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
               << std::endl;
     sample_rate_ = sample_rate;
     features_ = features;
-    busy = true;
+    busy_ = true;
     hop_size_ = hop_size;
     memory_ = memory;
     window_size_ = hop_size * memory;
@@ -128,6 +133,9 @@ void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, un
     aggregator_->input("input").set(sfx_pool);
     aggregator_->output("output").set(aggr_pool);
     network_ = new scheduler::Network(gen_);
+
+    last_frame_ = std::chrono::system_clock::now();
+    timer_thread_ = std::thread(&Analyzer::timer, this);
 }
 
 void Analyzer::clear() {
@@ -139,13 +147,40 @@ void Analyzer::clear() {
     sfx_pool.clear();
 }
 
-void Analyzer::end_session() {
+void Analyzer::end() {
+    std::lock_guard<std::mutex> guard(mutex_);
     clear();
     std::clog << "Analyzer session ended" << std::endl;
-    busy = false;
+    busy_ = false;
+}
+
+void Analyzer::end_session() {
+    timer_thread_.join();
+    end();
+}
+
+void Analyzer::timer() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            auto now = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = now - last_frame_;
+
+            if (elapsed_seconds.count() > 5) {
+                break;
+            }
+        }
+    }
+
+    end();
 }
 
 void Analyzer::process_frame(std::vector<Real> frame) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    last_frame_ = std::chrono::system_clock::now();
+
     frames_.push_back(frame);
     if (frames_.size() > memory_) {
         frames_.erase(frames_.begin());
@@ -237,6 +272,8 @@ Features Analyzer::extract_features(const Pool& p) {
 }
 
 Features Analyzer::get_features() {
+    std::lock_guard<std::mutex> guard(mutex_);
+
     if (sfx_pool.getRealPool().size() < 1) {
         return std::map<std::string, std::vector<Real>>();
     }
