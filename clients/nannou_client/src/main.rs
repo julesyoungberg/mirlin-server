@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use std::process;
 use std::string::ToString;
 use std::sync::mpsc::channel;
+use std::time;
 use websocket::client::ClientBuilder;
 use websocket::OwnedMessage;
 
@@ -139,21 +140,16 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     println!("received: {:?}", value);
 
     // listen to channel for messages from threads
-    let message = match model.rx.recv() {
-        Ok(m) => m,
-        Err(e) => {
-            drop(stream);
-            panic!(e);
-        }
-    };
-
-    match message {
-        OwnedMessage::Close(_) => {
-            drop(stream);
-            process::exit(1);
-        }
+    match model.rx.recv_timeout(time::Duration::from_millis(1)) {
+        Ok(m) => match m {
+            OwnedMessage::Close(_) => {
+                drop(stream);
+                process::exit(1);
+            }
+            _ => (),
+        },
         _ => (),
-    }
+    };
 }
 
 fn view(_app: &App, _model: &Model, frame: Frame) {
