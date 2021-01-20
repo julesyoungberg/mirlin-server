@@ -21,14 +21,13 @@ struct Model {
     receiver: websocket::receiver::Reader<std::net::TcpStream>,
     rx: std::sync::mpsc::Receiver<websocket::OwnedMessage>,
     stream: cpal::Stream,
-    tx: std::sync::mpsc::Sender<websocket::OwnedMessage>,
 }
 
 fn model(_app: &App) -> Model {
     println!("configuring audio input device");
     let audio_device = util::get_audio_device();
     let mic_config = util::get_mic_config(&audio_device);
-    let sample_rate = mic_config.sample_rate();
+    let cpal::SampleRate(sample_rate) = mic_config.sample_rate();
     println!("sample_rate: {:?}", sample_rate);
 
     println!("Connecting to {}", CONNECTION);
@@ -114,17 +113,16 @@ fn model(_app: &App) -> Model {
         receiver,
         rx,
         stream,
-        tx,
     }
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
-    let mut close = false;
+    let stream = &model.stream;
     let message = match model.receiver.recv_message() {
         Ok(m) => m,
         Err(e) => {
             println!("Error receiving message");
-            drop(model.stream);
+            drop(stream);
             panic!(e);
         }
     };
@@ -133,7 +131,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         OwnedMessage::Text(json_string) => serde_json::from_str(&json_string).unwrap(),
         _ => {
             println!("Received: {:?}", message);
-            drop(model.stream);
+            drop(stream);
             panic!("Receied unexpected message");
         }
     };
@@ -144,14 +142,14 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     let message = match model.rx.recv() {
         Ok(m) => m,
         Err(e) => {
-            drop(model.stream);
+            drop(stream);
             panic!(e);
         }
     };
 
     match message {
         OwnedMessage::Close(_) => {
-            drop(model.stream);
+            drop(stream);
             process::exit(1);
         }
         _ => (),

@@ -7,6 +7,9 @@ server:
 	cd ./src && cmake . && cmake --build . && mv ./server .. && cd ..
 
 up:
+	docker-compose up
+
+upb:
 	docker-compose up --build
 
 format:
