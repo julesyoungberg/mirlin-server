@@ -1,12 +1,11 @@
 use cpal;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use nannou::prelude::*;
+use ringbuf::{Consumer, RingBuffer};
 use serde_json;
 use serde_json::{json, Value};
-use std::process;
 use std::string::ToString;
-use std::sync::mpsc::channel;
-use std::time;
+use std::thread;
 use websocket::client::ClientBuilder;
 use websocket::OwnedMessage;
 
@@ -18,9 +17,11 @@ fn main() {
     nannou::app(model).update(update).simple_window(view).run();
 }
 
+#[allow(dead_code)]
 struct Model {
-    receiver: websocket::receiver::Reader<std::net::TcpStream>,
-    rx: std::sync::mpsc::Receiver<websocket::OwnedMessage>,
+    consumer: Consumer<serde_json::Value>,
+    current: serde_json::Value,
+    recv_thread: std::thread::JoinHandle<()>,
     stream: cpal::Stream,
 }
 
@@ -77,10 +78,6 @@ fn model(_app: &App) -> Model {
     // successful confirmation
     println!("confirmation received: {:?}", confirmation);
 
-    let (tx, rx) = channel();
-    let tx_1 = tx.clone();
-    let tx_2 = tx.clone();
-
     // create the stream
     let stream = audio_device
         .build_input_stream(
@@ -96,62 +93,61 @@ fn model(_app: &App) -> Model {
                 match sender.send_message(&message) {
                     Ok(()) => (),
                     Err(e) => {
-                        println!("Error sending frame: {:?}", e);
-                        let _ = tx_1.send(OwnedMessage::Close(None));
+                        println!("Error sending frame");
+                        panic!(e);
                     }
                 }
             },
             move |err| {
-                println!("error: {:?}", err);
-                let _ = tx_2.send(OwnedMessage::Close(None));
+                panic!(err);
             },
         )
         .unwrap();
 
     stream.play().unwrap();
 
+    let ring_buffer = RingBuffer::<serde_json::Value>::new(2); // Add some latency
+    let (mut producer, consumer) = ring_buffer.split();
+    producer.push(json!(null)).unwrap();
+
+    let recv_thread = thread::spawn(move || {
+        for raw in receiver.incoming_messages() {
+            let message = match raw {
+                Ok(m) => m,
+                Err(e) => {
+                    println!("Error receiving message: {:?}", e);
+                    return;
+                }
+            };
+
+            let value: Value = match message {
+                OwnedMessage::Text(json_string) => serde_json::from_str(&json_string).unwrap(),
+                _ => {
+                    println!("Received unexpected message: {:?}", message);
+                    return;
+                }
+            };
+
+            producer.push(value).ok();
+        }
+    });
+
     Model {
-        receiver,
-        rx,
+        consumer,
+        current: json!(null),
+        recv_thread,
         stream,
     }
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
-    let stream = &model.stream;
-    let message = match model.receiver.recv_message() {
-        Ok(m) => m,
-        Err(e) => {
-            println!("Error receiving message");
-            drop(stream);
-            panic!(e);
-        }
-    };
-
-    let value: Value = match message {
-        OwnedMessage::Text(json_string) => serde_json::from_str(&json_string).unwrap(),
-        _ => {
-            println!("Received: {:?}", message);
-            drop(stream);
-            panic!("Receied unexpected message");
-        }
-    };
-
-    println!("received: {:?}", value);
-
-    // listen to channel for messages from threads
-    match model.rx.recv_timeout(time::Duration::from_millis(1)) {
-        Ok(m) => match m {
-            OwnedMessage::Close(_) => {
-                drop(stream);
-                process::exit(1);
-            }
-            _ => (),
-        },
-        _ => (),
-    };
+    let value = model.consumer.pop();
+    if !value.is_none() {
+        model.current = value.unwrap();
+    }
 }
 
-fn view(_app: &App, _model: &Model, frame: Frame) {
+fn view(_app: &App, model: &Model, frame: Frame) {
+    println!("current features: {:?}", model.current);
     frame.clear(PURPLE);
 }
