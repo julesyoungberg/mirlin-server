@@ -20,3 +20,7 @@ To run the example rust client:
 cd client
 cargo run --release
 ```
+
+## note
+
+You must grant microphone access to the terminal you run the clients from, otherwise the input buffer will be only 0s.
