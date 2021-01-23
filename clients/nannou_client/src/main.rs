@@ -110,6 +110,7 @@ fn model(_app: &App) -> Model {
     let (mut producer, consumer) = ring_buffer.split();
     producer.push(json!(null)).unwrap();
 
+    // listen for messages from server, push to ring buffer
     let recv_thread = thread::spawn(move || {
         for raw in receiver.incoming_messages() {
             let message = match raw {
@@ -141,6 +142,7 @@ fn model(_app: &App) -> Model {
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
+    // update current value if new data is available
     let value = model.consumer.pop();
     if !value.is_none() {
         model.current = value.unwrap();
