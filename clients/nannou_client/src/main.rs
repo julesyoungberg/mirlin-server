@@ -149,7 +149,30 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     }
 }
 
-fn view(_app: &App, model: &Model, frame: Frame) {
+fn view(app: &App, model: &Model, frame: Frame) {
+    // Prepare to draw.
+    let draw = app.draw();
+
+    // Clear the background to purple.
+    draw.background().color(PLUM);
+
     println!("current features: {:?}", model.current);
-    frame.clear(PURPLE);
+
+    if let Some(payload) = model.current.get("payload") {
+        if let Some(features) = payload.get("features") {
+            if let Some(loudness_mean) = features.get("loudness.mean") {
+                if let Some(loudness_data) = &loudness_mean.as_array() {
+                    if let Some(loudness) = loudness_data[0].as_f64() {
+                        println!("loudness: {:?}", loudness);
+                        let size = 100000.0 * loudness as f32;
+                        // Draw a blue ellipse with default size and position.
+                        draw.ellipse().w_h(size, size).color(STEELBLUE);
+                    }
+                }
+            }
+        }
+    }
+
+    // Write to the window frame.
+    draw.to_frame(app, &frame).unwrap();
 }
