@@ -8,6 +8,9 @@
 
 #define PORT_NUMBER 9002
 
+// TODO
+// - validate connections when receiving messages
+// - fix session ending so clients can disconnect and connect again
 int main(int argc, char* argv[]) {
     std::clog << "Starting the mirlin server..." << std::endl;
 

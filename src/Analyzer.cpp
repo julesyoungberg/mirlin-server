@@ -6,9 +6,6 @@ Analyzer::Analyzer() { essentia::init(); }
 
 Analyzer::~Analyzer() {}
 
-// TODO
-// - Onset detection (from essentiaRT) needs a separate pool
-// - Fix chroma (needs an input frame size of 32768)
 void Analyzer::configure_subscription(std::vector<std::string> features) {
     // initialize default feature subscription with all falses
     subscription_ = FeatureSubscription();
@@ -24,7 +21,7 @@ void Analyzer::configure_subscription(std::vector<std::string> features) {
     subscription_["tristimulus"] = false;
     subscription_["spectral_contrast"] = false;
     subscription_["spectral_complexity"] = false;
-    subscription_["chroma"] = false;
+    subscription_["chroma"] = false; // TODO: fix - needs input frame size of 32768
     subscription_["onset"] = false;
     // insert true values for features provided
     for (auto const& feature : features) {
