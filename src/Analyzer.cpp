@@ -68,7 +68,6 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
 
     spectrum_ = factory.create("Spectrum");
     spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
-    hpcp_ = factory.create("HPCP", "size", 48);
 
     if (subscription_["rms"]) {
         rms_ = factory.create("RMS");
@@ -103,6 +102,7 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     }
 
     if (subscription_["key"]) {
+        hpcp_ = factory.create("HPCP", "size", 48);
         key_ = factory.create("Key");
     }
 
@@ -132,9 +132,6 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     frame_cutter_->output("frame") >> windowing_->input("frame");
     windowing_->output("frame") >> spectrum_->input("frame");
     spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
-    spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
-    spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
-    hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
 
     if (subscription_["rms"]) {
         windowing_->output("frame") >> rms_->input("array");
@@ -173,12 +170,6 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
         mfcc_->output("mfcc") >> PC(sfx_pool, "mfcc");
     }
 
-    if (subscription_["hpcp"]) {
-        spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
-        spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
-        hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
-    }
-
     if (subscription_["dissonance"]) {
         spectral_peaks_->output("frequencies") >> dissonance_->input("frequencies");
         spectral_peaks_->output("magnitudes") >> dissonance_->input("magnitudes");
@@ -186,6 +177,8 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     }
 
     if (subscription_["key"]) {
+        spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
+        spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
         hpcp_->output("hpcp") >> key_->input("pcp");
         key_->output("key") >> PC(sfx_pool, "key");
         key_->output("scale") >> PC(sfx_pool, "scale");
@@ -304,15 +297,6 @@ void Analyzer::aggregate() {
         for (auto& e : v) {
             aggr_pool.add("mfcc.mean", e * 1.0 / factor);
             aggr_pool.add("mfcc.var", 0);
-        }
-
-        v = sfx_pool.value<std::vector<std::vector<Real>>>("hpcp")[0];
-
-        aggr_pool.removeNamespace("hpcp");
-        aggr_pool.remove("hpcp");
-        for (auto& e : v) {
-            aggr_pool.add("hpcp.mean", e);
-            aggr_pool.add("hpcp.var", 0);
         }
     }
 }
