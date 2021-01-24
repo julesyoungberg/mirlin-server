@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
                 features.push_back(feature);
             }
 
-            analyzer.start_session(sample_rate, hop_size, memory, features);
+            analyzer.start_session(conn, sample_rate, hop_size, memory, features);
 
             Json::Value payload;
             payload["status"] = "ok";
@@ -88,9 +88,8 @@ int main(int argc, char* argv[]) {
     });
 
     // TODO make sure the correct client is sending a frame
-    server.message("audio_frame", [&main_event_loop, &server, &analyzer](ClientConnection conn,
-                                                                         const Json::Value& args) {
-        main_event_loop.post([conn, args, &server, &analyzer]() {
+    server.message("audio_frame", [&main_event_loop, &analyzer](ClientConnection conn, const Json::Value& args) {
+        main_event_loop.post([conn, args, &analyzer]() {
             auto json_frame = args["payload"];
             std::vector<float> frame;
 
@@ -100,9 +99,12 @@ int main(int argc, char* argv[]) {
             }
 
             std::clog << "Received audio frame of size " << frame.size() << std::endl;
-            analyzer.process_frame(frame);
-            auto features = analyzer.get_features();
+            analyzer.buffer_frame(frame);
+        });
+    });
 
+    analyzer.handle_features([&main_event_loop, &server](ClientConnection conn, Features features) {
+        main_event_loop.post([conn, features, &server]() {
             Json::Value json_features;
             for (auto const& iter : features) {
                 std::string feature = iter.first;

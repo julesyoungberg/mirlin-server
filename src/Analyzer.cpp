@@ -28,7 +28,8 @@ bool Analyzer::is_busy() {
     return busy_;
 }
 
-void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
+void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features) {
+    conn_ = conn;
     configure_subscription(features);
     std::clog << "Analyzer session initiated with sample rate: " << std::to_string(sample_rate)
               << std::endl;
@@ -136,6 +137,7 @@ void Analyzer::start_session(unsigned int sample_rate, unsigned int hop_size, un
 
     last_frame_ = std::chrono::system_clock::now();
     timer_thread_ = std::thread(&Analyzer::timer, this);
+    analyzer_thread_ = std::thread(&Analyzer::analyze, this);
 }
 
 void Analyzer::clear() {
@@ -148,6 +150,7 @@ void Analyzer::clear() {
 }
 
 void Analyzer::end() {
+    analyzer_thread_.join();
     std::lock_guard<std::mutex> guard(mutex_);
     clear();
     std::clog << "Analyzer session ended" << std::endl;
@@ -168,7 +171,7 @@ void Analyzer::timer() {
             auto now = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = now - last_frame_;
 
-            if (elapsed_seconds.count() > 5) {
+            if (!analyzing_ && elapsed_seconds.count() > 5) {
                 break;
             }
         }
@@ -177,26 +180,13 @@ void Analyzer::timer() {
     end();
 }
 
-void Analyzer::process_frame(std::vector<Real> frame) {
+void Analyzer::buffer_frame(std::vector<Real> frame) {
     std::lock_guard<std::mutex> guard(mutex_);
     last_frame_ = std::chrono::system_clock::now();
-
     frames_.push_back(frame);
     if (frames_.size() > memory_) {
         frames_.erase(frames_.begin());
     }
-
-    // create window from frame memory
-    std::fill(window_.begin(), window_.end(), 0);
-    for (int f = 0; f < frames_.size(); f++) {
-        for (int i = 0; i < hop_size_; i++) {
-            window_[f * hop_size_ + i] = frames_[f][i];
-        }
-    }
-
-    gen_->setVector(&window_);
-    gen_->process();
-    network_->run();
 }
 
 void Analyzer::aggregate() {
@@ -272,8 +262,6 @@ Features Analyzer::extract_features(const Pool& p) {
 }
 
 Features Analyzer::get_features() {
-    std::lock_guard<std::mutex> guard(mutex_);
-
     if (sfx_pool.getRealPool().size() < 1) {
         return std::map<std::string, std::vector<Real>>();
     }
@@ -285,4 +273,30 @@ Features Analyzer::get_features() {
     clear();
 
     return features;
+}
+
+void Analyzer::analyze() {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            std::fill(window_.begin(), window_.end(), 0);
+            for (int f = 0; f < frames_.size(); f++) {
+                for (int i = 0; i < hop_size_; i++) {
+                    window_[f * hop_size_ + i] = frames_[f][i];
+                }
+            }
+            gen_->setVector(&window_);
+            analyzing_ = true;
+        }
+
+        gen_->process();
+        network_->run();
+        auto features = get_features();
+        feature_handler_(conn_, features);
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            analyzing_ = false;
+        }
+    }
 }

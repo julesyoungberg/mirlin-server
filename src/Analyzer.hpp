@@ -11,6 +11,13 @@
 #include <ctime>
 #include <mutex>
 
+#ifndef ASIO_STANDALONE
+#define ASIO_STANDALONE
+#endif
+
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
+
 #include <essentia/algorithmfactory.h>
 #include <essentia/essentiamath.h>
 #include <essentia/pool.h>
@@ -21,6 +28,8 @@
 
 #include <essentia/streaming/algorithms/poolstorage.h>
 #include <essentia/scheduler/network.h>
+
+#include "WebsocketServer.hpp"
 
 using namespace essentia;
 using namespace streaming;
@@ -37,11 +46,17 @@ public:
 
     bool is_busy();
 
-    void start_session(unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
+    void start_session(ClientConnection conn, unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
 
     void end_session();
 
-    void process_frame(std::vector<float> raw_frame);
+    void process_frame(std::vector<float> frame);
+
+    void buffer_frame(std::vector<float> frame);
+
+    template <typename FeaturesCallback> void handle_features(FeaturesCallback handler) {
+        feature_handler_ = handler;
+    }
 
     Features get_features();
 
@@ -55,8 +70,10 @@ private:
     void end();
     void aggregate();
     Features extract_features(const Pool& p);
+    void analyze();
 
     bool busy_ = false;
+    bool analyzing_ = false;
     unsigned int sample_rate_;
     unsigned int hop_size_;
     unsigned int memory_;
@@ -91,8 +108,12 @@ private:
     scheduler::Network* network_ = NULL;
 
     std::thread timer_thread_;
+    std::thread analyzer_thread_;
     std::chrono::time_point<std::chrono::system_clock> last_frame_;
     std::mutex mutex_;
+
+    ClientConnection conn_;
+    std::function<void(ClientConnection, Features)> feature_handler_;
 };
 
 #endif
