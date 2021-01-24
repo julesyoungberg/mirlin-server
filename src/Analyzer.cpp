@@ -7,7 +7,17 @@ Analyzer::Analyzer() { essentia::init(); }
 Analyzer::~Analyzer() {}
 
 // TODO add
-// Tempo maybe CNN, onset detection, Dissonance, 
+// - Onset detection (from essentiaRT)
+// - RMS - https://essentia.upf.edu/reference/streaming_RMS.html
+// - Dissonance - https://essentia.upf.edu/reference/streaming_Dissonance.html
+// - Inharmonicity - https://essentia.upf.edu/reference/streaming_Inharmonicity.html
+// - Key - https://essentia.upf.edu/reference/streaming_Key.html
+// - Tristimulus - https://essentia.upf.edu/reference/streaming_Tristimulus.html
+// - TensorflowPredictTempoCNN - https://essentia.upf.edu/reference/streaming_TensorflowPredictTempoCNN.html
+// - SpectralContrast - https://essentia.upf.edu/reference/streaming_SpectralContrast.html
+// - SpectralComplexity - https://essentia.upf.edu/reference/streaming_SpectralComplexity.html
+// - Danceability - https://essentia.upf.edu/reference/streaming_Danceability.html
+// - Energy - https://essentia.upf.edu/reference/streaming_Energy.html
 void Analyzer::configure_subscription(std::vector<std::string> features) {
     // initialize default feature subscription with all falses
     subscription_ = FeatureSubscription();
