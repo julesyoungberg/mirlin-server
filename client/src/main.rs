@@ -174,24 +174,30 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     if let Some(payload) = model.current.get("payload") {
         if let Some(features) = payload.get("features") {
-            if let Some(onsets) = features.get("onset") {
-                if let Some(onset_data) = onsets.as_array() {
-                    if let Some(onset) = onset_data[0].as_f64() {
-                        if onset != 0.0 {
-                            draw.background().color(YELLOW);
-                        }
-                    }
-                }
-            }
+            let tristimulus = features
+                .get("tristimulus.mean")
+                .unwrap()
+                .as_array()
+                .unwrap();
+            // tristimulus maps sound to color
+            draw.background().rgb(
+                tristimulus[0].as_f64().unwrap() as f32,
+                tristimulus[1].as_f64().unwrap() as f32,
+                tristimulus[2].as_f64().unwrap() as f32,
+            );
 
-            if let Some(loudness_mean) = features.get("loudness.mean") {
-                if let Some(loudness_data) = &loudness_mean.as_array() {
-                    if let Some(loudness) = loudness_data[0].as_f64() {
-                        println!("loudness: {:?}", loudness);
-                        let size = 2000.0 * loudness as f32 + 1.0;
-                        // Draw a blue ellipse with default size and position.
-                        draw.ellipse().w_h(size, size).color(STEELBLUE);
-                    }
+            let loudness = features.get("loudness.mean").unwrap().as_array().unwrap()[0]
+                .as_f64()
+                .unwrap();
+            println!("loudness: {:?}", loudness);
+            let size = 2000.0 * loudness as f32 + 1.0;
+            // Draw a blue ellipse with default size and position.
+            let ellipse = draw.ellipse().w_h(size, size).color(STEELBLUE);
+            // if it's onset change the color
+            if let Some(onset_data) = features.get("onset").unwrap().as_array() {
+                let onset = onset_data[0].as_f64().unwrap();
+                if onset != 0.0 {
+                    ellipse.color(YELLOW);
                 }
             }
         }

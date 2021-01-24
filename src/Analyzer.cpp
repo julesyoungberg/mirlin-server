@@ -128,6 +128,8 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
                                            .7 / NOVELTY_MULT, "pre_max", 80, "pre_avg", 120,
                                            "frameRate", sample_rate_ * 1.0 / hop_size_, "combine",
                                            combine_ms_);
+        super_flux_peaks_->input(0).setAcquireSize(1);
+        super_flux_peaks_->input(0).setReleaseSize(1);
     }
 
     // Aggregation
