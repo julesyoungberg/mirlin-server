@@ -46,7 +46,20 @@ fn model(_app: &App) -> Model {
     let session_request = json!({
         "type": "session_request",
         "payload": {
-            "features": ["centroid", "loudness", "noisiness", "pitch"],
+            "features": [
+                "rms",
+                "energy",
+                "centroid",
+                "loudness",
+                "noisiness",
+                "pitch",
+                "mfcc",
+                "dissonance",
+                "key",
+                "tristimulus",
+                "spectral_contrast",
+                "spectral_complexity",
+            ],
             "sample_rate": sample_rate,
             "hop_size": 512 as u32, // happens to be cpal's buffer size
             "memory": 4 as u32, // rember 4 frames including current

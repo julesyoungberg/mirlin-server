@@ -6,27 +6,25 @@ Analyzer::Analyzer() { essentia::init(); }
 
 Analyzer::~Analyzer() {}
 
-// TODO add
-// - Onset detection (from essentiaRT)
-// - RMS - https://essentia.upf.edu/reference/streaming_RMS.html
-// - Dissonance - https://essentia.upf.edu/reference/streaming_Dissonance.html
-// - Inharmonicity - https://essentia.upf.edu/reference/streaming_Inharmonicity.html
-// - Key - https://essentia.upf.edu/reference/streaming_Key.html
-// - Tristimulus - https://essentia.upf.edu/reference/streaming_Tristimulus.html
-// - TensorflowPredictTempoCNN - https://essentia.upf.edu/reference/streaming_TensorflowPredictTempoCNN.html
-// - SpectralContrast - https://essentia.upf.edu/reference/streaming_SpectralContrast.html
-// - SpectralComplexity - https://essentia.upf.edu/reference/streaming_SpectralComplexity.html
-// - Danceability - https://essentia.upf.edu/reference/streaming_Danceability.html
-// - Energy - https://essentia.upf.edu/reference/streaming_Energy.html
+// TODO
+// - Onset detection (from essentiaRT) needs a separate pool
+// - Fix chroma (needs an input frame size of 32768)
 void Analyzer::configure_subscription(std::vector<std::string> features) {
     // initialize default feature subscription with all falses
     subscription_ = FeatureSubscription();
+    subscription_["rms"] = false;
+    subscription_["energy"] = false;
     subscription_["centroid"] = false;
     subscription_["loudness"] = false;
     subscription_["noisiness"] = false;
     subscription_["pitch"] = false;
     subscription_["mfcc"] = false;
-    subscription_["hpcp"] = false;
+    subscription_["dissonance"] = false;
+    subscription_["key"] = false;
+    subscription_["tristimulus"] = false;
+    subscription_["spectral_contrast"] = false;
+    subscription_["spectral_complexity"] = false;
+    subscription_["chroma"] = false;
     // insert true values for features provided
     for (auto const& feature : features) {
         subscription_[feature] = true;
@@ -68,10 +66,18 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
                                    "lastFrameToEndOfFile", true, "silentFrames", "keep");
     windowing_ = factory.create("Windowing", "type", "square", "zeroPhase", true);
 
-    // Core
     spectrum_ = factory.create("Spectrum");
+    spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
+    hpcp_ = factory.create("HPCP", "size", 48);
 
-    // features
+    if (subscription_["rms"]) {
+        rms_ = factory.create("RMS");
+    }
+
+    if (subscription_["energy"]) {
+        energy_ = factory.create("Energy");
+    }
+
     if (subscription_["centroid"]) {
         centroid_ = factory.create("Centroid");
     }
@@ -92,9 +98,28 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
         mfcc_ = factory.create("MFCC", "inputSize", window_size_ / 2 + 1);
     }
 
-    if (subscription_["hpcp"]) {
-        spectral_peaks_ = factory.create("SpectralPeaks", "sampleRate", sample_rate_);
-        hpcp_ = factory.create("HPCP", "size", 48);
+    if (subscription_["dissonance"]) {
+        dissonance_ = factory.create("Dissonance");
+    }
+
+    if (subscription_["key"]) {
+        key_ = factory.create("Key");
+    }
+
+    if (subscription_["tristimulus"]) {
+        tristimulus_ = factory.create("Tristimulus");
+    }
+
+    if (subscription_["spectral_contrast"]) {
+        spectral_contrast_ = factory.create("SpectralContrast");
+    }
+
+    if (subscription_["spectral_complexity"]) {
+        spectral_complexity_ = factory.create("SpectralComplexity");
+    }
+
+    if (subscription_["chroma"]) {
+        chroma_ = factory.create("Chromagram");
     }
 
     // Aggregation
@@ -106,6 +131,20 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     gen_->output("data") >> frame_cutter_->input("signal");
     frame_cutter_->output("frame") >> windowing_->input("frame");
     windowing_->output("frame") >> spectrum_->input("frame");
+    spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
+    spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
+    spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
+    hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
+
+    if (subscription_["rms"]) {
+        windowing_->output("frame") >> rms_->input("array");
+        rms_->output("rms") >> PC(sfx_pool, "rms");
+    }
+
+    if (subscription_["energy"]) {
+        windowing_->output("frame") >> energy_->input("array");
+        energy_->output("energy") >> PC(sfx_pool, "energy");
+    }
 
     if (subscription_["centroid"]) {
         spectrum_->output("spectrum") >> centroid_->input("array");
@@ -135,10 +174,44 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     }
 
     if (subscription_["hpcp"]) {
-        spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
         spectral_peaks_->output("frequencies") >> hpcp_->input("frequencies");
         spectral_peaks_->output("magnitudes") >> hpcp_->input("magnitudes");
         hpcp_->output("hpcp") >> PC(sfx_pool, "hpcp");
+    }
+
+    if (subscription_["dissonance"]) {
+        spectral_peaks_->output("frequencies") >> dissonance_->input("frequencies");
+        spectral_peaks_->output("magnitudes") >> dissonance_->input("magnitudes");
+        dissonance_->output("dissonance") >> PC(sfx_pool, "dissonance");
+    }
+
+    if (subscription_["key"]) {
+        hpcp_->output("hpcp") >> key_->input("pcp");
+        key_->output("key") >> PC(sfx_pool, "key");
+        key_->output("scale") >> PC(sfx_pool, "scale");
+        key_->output("strength") >> PC(sfx_pool, "key_strength");
+    }
+
+    if (subscription_["tristimulus"]) {
+        spectral_peaks_->output("frequencies") >> tristimulus_->input("frequencies");
+        spectral_peaks_->output("magnitudes") >> tristimulus_->input("magnitudes");
+        tristimulus_->output("tristimulus") >> PC(sfx_pool, "tristimulus");
+    }
+
+    if (subscription_["spectral_contrast"]) {
+        spectrum_->output("spectrum") >> spectral_contrast_->input("spectrum");
+        spectral_contrast_->output("spectralContrast") >> PC(sfx_pool, "spectral_contrast");
+        spectral_contrast_->output("spectralValley") >> PC(sfx_pool, "spectral_valley");
+    }
+
+    if (subscription_["spectral_complexity"]) {
+        spectrum_->output("spectrum") >> spectral_complexity_->input("spectrum");
+        spectral_complexity_->output("spectralComplexity") >> PC(sfx_pool, "spectral_complexity");
+    }
+
+    if (subscription_["chroma"]) {
+        windowing_->output("frame") >> chroma_->input("frame");
+        chroma_->output("chromagram") >> PC(sfx_pool, "chroma");
     }
 
     aggregator_->input("input").set(sfx_pool);

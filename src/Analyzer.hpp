@@ -92,6 +92,8 @@ private:
     /// algos
     streaming::Algorithm* frame_cutter_;
     streaming::Algorithm* windowing_;
+    streaming::Algorithm* rms_;
+    streaming::Algorithm* energy_;
     streaming::Algorithm* centroid_;
     streaming::Algorithm* loudness_;
     streaming::Algorithm* spectrum_;
@@ -100,6 +102,12 @@ private:
     streaming::Algorithm* mfcc_;
     streaming::Algorithm* hpcp_;
     streaming::Algorithm* spectral_peaks_;
+    streaming::Algorithm* dissonance_;
+    streaming::Algorithm* key_;
+    streaming::Algorithm* tristimulus_;
+    streaming::Algorithm* spectral_contrast_;
+    streaming::Algorithm* spectral_complexity_;
+    streaming::Algorithm* chroma_;
     //// IO
     VectorInput<Real>* gen_;
 
