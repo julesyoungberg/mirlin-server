@@ -59,6 +59,7 @@ fn model(_app: &App) -> Model {
                 "tristimulus",
                 "spectral_contrast",
                 "spectral_complexity",
+                "onset",
             ],
             "sample_rate": sample_rate,
             "hop_size": 512 as u32, // happens to be cpal's buffer size

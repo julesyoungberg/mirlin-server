@@ -1,15 +1,14 @@
 #ifndef _ANALYZER
 #define _ANALYZER
 
-#include <iostream>
-#include <thread>
-#include <vector>
-#include <map>
-#include <thread>
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <iostream>
+#include <map>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 #ifndef ASIO_STANDALONE
 #define ASIO_STANDALONE
@@ -21,13 +20,13 @@
 #include <essentia/algorithmfactory.h>
 #include <essentia/essentiamath.h>
 #include <essentia/pool.h>
-#include <essentia/streaming/streamingalgorithm.h>
+#include <essentia/streaming/algorithms/ringbufferinput.h>
 #include <essentia/streaming/algorithms/vectorinput.h>
 #include <essentia/streaming/algorithms/vectoroutput.h>
-#include <essentia/streaming/algorithms/ringbufferinput.h>
+#include <essentia/streaming/streamingalgorithm.h>
 
-#include <essentia/streaming/algorithms/poolstorage.h>
 #include <essentia/scheduler/network.h>
+#include <essentia/streaming/algorithms/poolstorage.h>
 
 #include "WebsocketServer.hpp"
 
@@ -46,7 +45,8 @@ public:
 
     bool is_busy();
 
-    void start_session(ClientConnection conn, unsigned int sample_rate, unsigned int hop_size, unsigned int memory, std::vector<std::string> features);
+    void start_session(ClientConnection conn, unsigned int sample_rate, unsigned int hop_size,
+                       unsigned int memory, std::vector<std::string> features);
 
     void end_session();
 
@@ -59,9 +59,6 @@ public:
     }
 
     Features get_features();
-
-    Pool aggr_pool;
-    Pool sfx_pool;
 
 private:
     void configure_subscription(std::vector<std::string> features);
@@ -108,12 +105,19 @@ private:
     streaming::Algorithm* spectral_contrast_;
     streaming::Algorithm* spectral_complexity_;
     streaming::Algorithm* chroma_;
+    streaming::Algorithm* triangle_bands_;
+    streaming::Algorithm* super_flux_novelty_;
+    streaming::Algorithm* super_flux_peaks_;
     //// IO
     VectorInput<Real>* gen_;
 
     essentia::standard::Algorithm* aggregator_;
 
     scheduler::Network* network_ = NULL;
+
+    Pool aggr_pool_;
+    Pool sfx_pool_;
+    Pool onset_pool_;
 
     std::thread timer_thread_;
     std::thread analyzer_thread_;

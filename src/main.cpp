@@ -35,8 +35,8 @@ int main(int argc, char* argv[]) {
         });
     });
 
-    server.message("session_request", [&main_event_loop, &server, &analyzer](
-                                               ClientConnection conn, const Json::Value& args) {
+    server.message("session_request", [&main_event_loop, &server,
+                                       &analyzer](ClientConnection conn, const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
             if (analyzer.is_busy()) {
                 // TODO: respond with error and disconnect
@@ -78,17 +78,18 @@ int main(int argc, char* argv[]) {
     });
 
     // TODO make sure the correct client is requesting to close the session
-    server.message("session_end", [&main_event_loop, &analyzer](
-                                               ClientConnection conn, const Json::Value& args) {
-        main_event_loop.post([&analyzer]() {
-            if (analyzer.is_busy()) {
-                analyzer.end_session();
-            }
-        });
-    });
+    server.message("session_end",
+                   [&main_event_loop, &analyzer](ClientConnection conn, const Json::Value& args) {
+                       main_event_loop.post([&analyzer]() {
+                           if (analyzer.is_busy()) {
+                               analyzer.end_session();
+                           }
+                       });
+                   });
 
     // TODO make sure the correct client is sending a frame
-    server.message("audio_frame", [&main_event_loop, &analyzer](ClientConnection conn, const Json::Value& args) {
+    server.message("audio_frame", [&main_event_loop, &analyzer](ClientConnection conn,
+                                                                const Json::Value& args) {
         main_event_loop.post([conn, args, &analyzer]() {
             auto json_frame = args["payload"];
             std::vector<float> frame;
