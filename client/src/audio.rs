@@ -32,6 +32,10 @@ pub struct AudioFeatures {
     pub current: serde_json::Value,
     pub recv_thread: std::thread::JoinHandle<()>,
     pub stream: cpal::Stream,
+    pub onset: bool,
+    pub loudness: f32,
+    pub tristimulus: [f32; 3],
+    pub smoothing: f32,
 }
 
 impl AudioFeatures {
@@ -151,14 +155,55 @@ impl AudioFeatures {
             current: json!(null),
             recv_thread,
             stream,
+            onset: false,
+            loudness: 0.0,
+            tristimulus: [0.0, 0.0, 0.0],
+            smoothing: 0.6,
         }
+    }
+
+    fn lerp(&self, prev: f32, next: f32) -> f32 {
+        self.smoothing * prev + (1.0 - self.smoothing) * next
     }
 
     // update current value if new data is available
     pub fn update(&mut self) {
-        let value = self.consumer.pop();
-        if !value.is_none() {
-            self.current = value.unwrap();
+        self.current = match self.consumer.pop() {
+            Some(v) => v,
+            None => return,
+        };
+
+        let payload = match self.current.get("payload") {
+            Some(p) => p,
+            None => return,
+        };
+
+        let features = match payload.get("features") {
+            Some(f) => f,
+            None => return,
+        };
+
+        println!("current features: {:?}", features);
+
+        if let Some(onset) = features.get("onset").unwrap().as_array() {
+            self.onset = onset[0].as_f64().unwrap() != 0.0;
         }
+
+        let loudness = features.get("loudness.mean").unwrap().as_array().unwrap()[0]
+            .as_f64()
+            .unwrap();
+        self.loudness = self.lerp(self.loudness, loudness as f32);
+
+        let tristimulus = features
+            .get("tristimulus.mean")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        self.tristimulus[0] =
+            self.lerp(self.tristimulus[0], tristimulus[0].as_f64().unwrap() as f32);
+        self.tristimulus[1] =
+            self.lerp(self.tristimulus[1], tristimulus[1].as_f64().unwrap() as f32);
+        self.tristimulus[2] =
+            self.lerp(self.tristimulus[2], tristimulus[2].as_f64().unwrap() as f32);
     }
 }
