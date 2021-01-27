@@ -1,6 +1,7 @@
 use nannou::prelude::*;
 
 mod audio;
+mod util;
 
 fn main() {
     nannou::app(model).update(update).simple_window(view).run();
@@ -34,12 +35,29 @@ fn view(app: &App, model: &Model, frame: Frame) {
         model.audio_features.tristimulus[2],
     );
 
-    let size = 5000.0 * model.audio_features.loudness + 5.0;
+    let size = util::clamp(3000.0 * model.audio_features.loudness + 5.0, 1.0, 200.0);
     // Draw a blue ellipse with default size and position.
-    let ellipse = draw.ellipse().w_h(size, size).color(STEELBLUE);
+    let ellipse = draw.ellipse().w_h(size, size).color(BLACK);
     // if it's onset change the color
     if model.audio_features.onset {
-        ellipse.color(YELLOW);
+        ellipse.color(WHITE);
+    }
+
+    let colors = [RED, ORANGE, YELLOW, LIME, CYAN, INDIGO, VIOLET];
+    for i in 0..7 {
+        let radius = i as f32 * 40.0 + 120.0;
+
+        let points = (0..=360).map(|j| {
+            let radian = deg_to_rad(j as f32);
+            let x = radian.sin() * radius;
+            let y = radian.cos() * radius;
+            (pt2(x, y), colors[i])
+        });
+
+        let scale = 300.0 * (i + 1) as f32;
+        let weight = util::clamp(model.audio_features.mfcc[i + 1].abs() * scale, 1.0, 35.0);
+
+        draw.polyline().weight(weight).points_colored(points);
     }
 
     // Write to the window frame.

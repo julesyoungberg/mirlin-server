@@ -36,6 +36,7 @@ pub struct AudioFeatures {
     pub loudness: f32,
     pub tristimulus: [f32; 3],
     pub smoothing: f32,
+    pub mfcc: [f32; 13],
 }
 
 impl AudioFeatures {
@@ -159,6 +160,9 @@ impl AudioFeatures {
             loudness: 0.0,
             tristimulus: [0.0, 0.0, 0.0],
             smoothing: 0.6,
+            mfcc: [
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            ],
         }
     }
 
@@ -183,7 +187,7 @@ impl AudioFeatures {
             None => return,
         };
 
-        println!("current features: {:?}", features);
+        // println!("current features: {:?}", features);
 
         if let Some(onset) = features.get("onset").unwrap().as_array() {
             self.onset = onset[0].as_f64().unwrap() != 0.0;
@@ -199,11 +203,14 @@ impl AudioFeatures {
             .unwrap()
             .as_array()
             .unwrap();
-        self.tristimulus[0] =
-            self.lerp(self.tristimulus[0], tristimulus[0].as_f64().unwrap() as f32);
-        self.tristimulus[1] =
-            self.lerp(self.tristimulus[1], tristimulus[1].as_f64().unwrap() as f32);
-        self.tristimulus[2] =
-            self.lerp(self.tristimulus[2], tristimulus[2].as_f64().unwrap() as f32);
+        for i in 0..3 {
+            self.tristimulus[i] =
+                self.lerp(self.tristimulus[i], tristimulus[i].as_f64().unwrap() as f32);
+        }
+
+        let mfcc = features.get("mfcc.mean").unwrap().as_array().unwrap();
+        for i in 0..13 {
+            self.mfcc[i] = self.lerp(self.mfcc[i], mfcc[i].as_f64().unwrap() as f32);
+        }
     }
 }

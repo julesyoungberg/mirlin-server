@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
     server.message("session_request", [&main_event_loop, &server,
                                        &analyzer](ClientConnection conn, const Json::Value& args) {
         main_event_loop.post([conn, args, &server, &analyzer]() {
+            std::clog << "Session request - analyzer busy: " << analyzer.is_busy() << std::endl;
             if (analyzer.is_busy()) {
                 // TODO: respond with error and disconnect
                 return;
@@ -102,7 +103,6 @@ int main(int argc, char* argv[]) {
                 frame.push_back(sample);
             }
 
-            std::clog << "Received audio frame of size " << frame.size() << std::endl;
             analyzer.buffer_frame(frame);
         });
     });
@@ -128,7 +128,6 @@ int main(int argc, char* argv[]) {
             Json::Value features_msg;
             features_msg["payload"] = payload;
 
-            std::clog << "Sending features to client" << std::endl;
             server.send_message(conn, "audio_features", features_msg);
         });
     });
