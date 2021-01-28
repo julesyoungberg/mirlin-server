@@ -47,6 +47,7 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     memory_ = memory;
     window_size_ = hop_size * memory;
     frame_count_ = 0;
+    ending_ = false;
 
     combine_ms_ = 50;
     window_.resize(window_size_);
@@ -243,14 +244,28 @@ void Analyzer::clear() {
 }
 
 void Analyzer::end() {
+    // busy may or may not already be false - make sure so that the analyzer thread knows to exit
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        busy_ = false;
+    }
+
     analyzer_thread_.join();
-    std::lock_guard<std::mutex> guard(mutex_);
-    clear();
-    std::clog << "Analyzer session ended" << std::endl;
-    busy_ = false;
+
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        clear();
+        busy_ = false;
+    }
 }
 
 void Analyzer::end_session() {
+    // set busy to false so the timer thread knows to exit
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        busy_ = false;
+    }
+
     timer_thread_.join();
     end();
 }
@@ -259,18 +274,31 @@ void Analyzer::timer() {
     while (true) {
         std::this_thread::sleep_for(std::chrono::seconds(5));
 
+        bool analyzing = false;
+        bool timedout = false;
+        bool busy = false;
+
+        // safely read from the analyzer's state
         {
             std::lock_guard<std::mutex> guard(mutex_);
             auto now = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = now - last_frame_;
+            analyzing = analyzing_;
+            timedout = elapsed_seconds.count() > 5;
+            busy = busy_;
+        }
 
-            if (!analyzing_ && elapsed_seconds.count() > 5) {
-                break;
-            }
+        // the session has timed out
+        if (!analyzing && timedout) {
+            end();
+            break;
+        }
+
+        // the session has been ended
+        if (!busy) {
+            break;
         }
     }
-
-    end();
 }
 
 void Analyzer::buffer_frame(std::vector<Real> frame) {
@@ -386,6 +414,10 @@ void Analyzer::analyze() {
         {
             std::lock_guard<std::mutex> guard(mutex_);
             analyzing_ = false;
+            
+            if (!busy_) {
+                break;
+            }
         }
     }
 }

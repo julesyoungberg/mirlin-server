@@ -33,15 +33,15 @@ int main(int argc, char* argv[]) {
             std::clog << "Connection closed." << std::endl;
             std::clog << "There are now " << server.num_connections() << " open connections."
                       << std::endl;
-
             analyzer.end_session();
+            std::clog << "Analyzer busy: " << analyzer.is_busy() << std::endl;
         });
     });
 
     server.message("session_request", [&main_event_loop, &server,
                                        &analyzer](ClientConnection conn, const Json::Value& args) {
+        std::clog << "Session request - analyzer busy: " << analyzer.is_busy() << std::endl;
         main_event_loop.post([conn, args, &server, &analyzer]() {
-            std::clog << "Session request - analyzer busy: " << analyzer.is_busy() << std::endl;
             if (analyzer.is_busy()) {
                 // TODO: respond with error and disconnect
                 return;
