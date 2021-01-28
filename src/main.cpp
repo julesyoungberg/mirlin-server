@@ -107,8 +107,13 @@ int main(int argc, char* argv[]) {
         });
     });
 
-    analyzer.handle_features([&main_event_loop, &server](ClientConnection conn, Features features) {
-        main_event_loop.post([conn, features, &server]() {
+    analyzer.handle_features([&main_event_loop, &server, &analyzer](ClientConnection conn, Features features) {
+        main_event_loop.post([conn, features, &server, &analyzer]() {
+            // abort if the session has ended
+            if (!analyzer.is_busy()) {
+                return;
+            }
+
             Json::Value json_features;
             for (auto const& iter : features) {
                 std::string feature = iter.first;
