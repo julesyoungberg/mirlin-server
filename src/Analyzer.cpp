@@ -11,6 +11,7 @@ void Analyzer::configure_subscription(std::vector<std::string> features) {
     subscription_ = FeatureSubscription();
     subscription_["rms"] = false;
     subscription_["energy"] = false;
+    subscription_["spectrum"] = false;
     subscription_["centroid"] = false;
     subscription_["loudness"] = false;
     subscription_["noisiness"] = false;
@@ -143,6 +144,10 @@ void Analyzer::start_session(ClientConnection conn, unsigned int sample_rate, un
     frame_cutter_->output("frame") >> windowing_->input("frame");
     windowing_->output("frame") >> spectrum_->input("frame");
     spectrum_->output("spectrum") >> spectral_peaks_->input("spectrum");
+
+    if (subscription_["spectrum"]) {
+        spectrum_->output("spectrum") >> PC(sfx_pool_, "spectrum");
+    }
 
     if (subscription_["rms"]) {
         windowing_->output("frame") >> rms_->input("array");
