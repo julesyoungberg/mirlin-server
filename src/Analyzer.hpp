@@ -72,6 +72,7 @@ private:
     bool busy_ = false;
     bool analyzing_ = false;
     bool ending_ = false;
+    bool new_frame_ = false;
     unsigned int sample_rate_;
     unsigned int hop_size_;
     unsigned int memory_;

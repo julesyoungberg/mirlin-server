@@ -313,6 +313,7 @@ void Analyzer::buffer_frame(std::vector<Real> frame) {
     if (frames_.size() > memory_) {
         frames_.erase(frames_.begin());
     }
+    new_frame_ = true;
 }
 
 void Analyzer::aggregate() {
@@ -399,8 +400,10 @@ Features Analyzer::get_features() {
 
 void Analyzer::analyze() {
     while (true) {
+        bool new_frame = false;
         {
             std::lock_guard<std::mutex> guard(mutex_);
+            new_frame = new_frame_;
             std::fill(window_.begin(), window_.end(), 0);
             for (int f = 0; f < frames_.size(); f++) {
                 for (int i = 0; i < hop_size_; i++) {
@@ -408,13 +411,19 @@ void Analyzer::analyze() {
                 }
             }
             gen_->setVector(&window_);
-            analyzing_ = true;
+            if (new_frame) {
+                analyzing_ = true;
+            }
         }
 
-        gen_->process();
-        network_->run();
-        auto features = get_features();
-        feature_handler_(conn_, features);
+        if (new_frame) {
+            gen_->process();
+            network_->run();
+            auto features = get_features();
+            feature_handler_(conn_, features);
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
 
         {
             std::lock_guard<std::mutex> guard(mutex_);
